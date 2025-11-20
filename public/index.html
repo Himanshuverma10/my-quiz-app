@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Quiz Master</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
+        body { font-family: 'Outfit', sans-serif; background: #f0fdf4; }
+        .slide-up { animation: slideUp 0.5s ease-out; }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState } = React;
+        const { Brain, Trophy, ArrowRight, RotateCcw, Loader2, Sparkles } = lucide;
+
+        const App = () => {
+            const [view, setView] = useState('setup'); 
+            const [topic, setTopic] = useState('');
+            const [difficulty, setDifficulty] = useState('Medium');
+            const [quizData, setQuizData] = useState([]);
+            const [currentQ, setCurrentQ] = useState(0);
+            const [score, setScore] = useState(0);
+            const [answers, setAnswers] = useState({});
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState('');
+
+            const generateQuiz = async () => {
+                if (!topic) return setError("Please enter a topic!");
+                setLoading(true);
+                setError('');
+
+                try {
+                    // Ab hum apne khud ke backend ko call kar rahe hain
+                    // Note: Jab live hoga tab '/api/generate-quiz' chalega
+                    const response = await fetch('/api/generate-quiz', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ topic, difficulty })
+                    });
+
+                    const data = await response.json();
+                    if (data.error) throw new Error(data.error);
+                    
+                    setQuizData(data);
+                    setView('quiz');
+                    setCurrentQ(0);
+                    setScore(0);
+                    setAnswers({});
+                } catch (err) {
+                    setError("Error: " + err.message);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const handleAnswer = (option) => {
+                const isCorrect = option === quizData[currentQ].correctAnswer;
+                setAnswers({ ...answers, [currentQ]: option });
+                if (isCorrect) setScore(s => s + 1);
+            };
+
+            // Setup View
+            if (view === 'setup') return (
+                <div className="min-h-screen flex items-center justify-center p-4">
+                    <div className="max-w-md w-full bg-white rounded-2xl shadow-xl overflow-hidden slide-up border border-green-100">
+                        <div className="bg-green-600 p-8 text-center relative overflow-hidden">
+                            <div className="absolute top-0 left-0 w-full h-full bg-white/10 pattern-dots"></div>
+                            <Brain className="w-16 h-16 text-white mx-auto mb-3 relative z-10" />
+                            <h1 className="text-3xl font-bold text-white relative z-10">QuizGen AI</h1>
+                            <p className="text-green-100 relative z-10">Free Unlimited Quizzes</p>
+                        </div>
+                        <div className="p-8 space-y-6">
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-2">What do you want to learn?</label>
+                                <input type="text" value={topic} onChange={e => setTopic(e.target.value)}
+                                    className="w-full p-4 border-2 border-gray-200 rounded-xl focus:border-green-500 focus:ring-0 outline-none transition text-lg"
+                                    placeholder="e.g. Solar System, React JS..." />
+                            </div>
+                            
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-2">Difficulty Level</label>
+                                <div className="grid grid-cols-3 gap-2">
+                                    {['Easy', 'Medium', 'Hard'].map(lvl => (
+                                        <button key={lvl} onClick={() => setDifficulty(lvl)}
+                                            className={`p-2 rounded-lg text-sm font-medium transition ${difficulty === lvl ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                                            {lvl}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {error && <div className="text-red-500 text-sm bg-red-50 p-3 rounded-lg flex items-center gap-2">⚠️ {error}</div>}
+
+                            <button onClick={generateQuiz} disabled={loading}
+                                className="w-full bg-black text-white py-4 rounded-xl font-bold hover:bg-gray-800 transition flex justify-center items-center gap-2 text-lg shadow-lg">
+                                {loading ? <Loader2 className="animate-spin" /> : <><Sparkles size={20} /> Create Quiz</>}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+
+            // Quiz View
+            if (view === 'quiz') {
+                const q = quizData[currentQ];
+                const answered = answers[currentQ];
+                return (
+                    <div className="min-h-screen bg-green-50 flex items-center justify-center p-4">
+                        <div className="max-w-2xl w-full bg-white rounded-2xl shadow-lg overflow-hidden slide-up">
+                            <div className="p-6 border-b flex justify-between items-center bg-white sticky top-0 z-10">
+                                <span className="text-gray-400 font-bold text-sm tracking-wider">QUESTION {currentQ + 1}/{quizData.length}</span>
+                                <button onClick={() => setView('setup')} className="text-red-500 text-sm font-bold hover:underline">QUIT</button>
+                            </div>
+                            <div className="p-8">
+                                <h2 className="text-2xl font-bold text-gray-800 mb-8 leading-snug">{q.question}</h2>
+                                <div className="space-y-3">
+                                    {q.options.map((opt, idx) => {
+                                        let style = "w-full text-left p-5 rounded-xl border-2 transition font-medium text-lg ";
+                                        if (answered) {
+                                            if (opt === q.correctAnswer) style += "border-green-500 bg-green-50 text-green-800";
+                                            else if (opt === answered) style += "border-red-500 bg-red-50 text-red-800";
+                                            else style += "border-gray-100 text-gray-400";
+                                        } else style += "border-gray-100 hover:border-green-500 hover:bg-green-50 text-gray-700";
+                                        return <button key={idx} onClick={() => !answered && handleAnswer(opt)} disabled={!!answered} className={style}>{opt}</button>;
+                                    })}
+                                </div>
+                                {answered && <div className="mt-6 p-5 bg-blue-50 text-blue-900 rounded-xl border border-blue-100"><strong>💡 Explanation:</strong> {q.explanation}</div>}
+                            </div>
+                            <div className="p-6 bg-gray-50 border-t flex justify-end">
+                                {answered && (currentQ < quizData.length - 1 ? 
+                                    <button onClick={() => setCurrentQ(c => c + 1)} className="px-8 py-3 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 flex items-center gap-2">Next <ArrowRight size={20} /></button> :
+                                    <button onClick={() => setView('result')} className="px-8 py-3 bg-black text-white rounded-xl font-bold hover:bg-gray-800 flex items-center gap-2">Finish <Trophy size={20} /></button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            // Result View
+            return (
+                <div className="min-h-screen bg-green-900 flex items-center justify-center p-4">
+                    <div className="max-w-md w-full bg-white rounded-3xl shadow-2xl p-8 text-center slide-up">
+                        <Trophy className="w-20 h-20 text-yellow-400 mx-auto mb-6 drop-shadow-lg" />
+                        <h2 className="text-4xl font-black text-gray-800 mb-2">{Math.round((score/quizData.length)*100)}%</h2>
+                        <p className="text-gray-500 mb-8 font-medium">You got {score} out of {quizData.length} correct!</p>
+                        <button onClick={() => setView('setup')} className="w-full bg-green-600 text-white py-4 rounded-xl font-bold hover:bg-green-700 transition flex justify-center items-center gap-2 shadow-lg shadow-green-200"><RotateCcw size={20} /> Try Another Topic</button>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
