@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>GenQuiz AI - 3D Experience</title>
+    <title>GenQuiz AI - Neon Edition</title>
     
     <!-- React & ReactDOM (Stable UMD Version) -->
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
@@ -22,19 +22,21 @@
     </script>
 
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap');
-        body { font-family: 'Poppins', sans-serif; background-color: #e9fff0; margin: 0; overflow-x: hidden; }
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
+        body { font-family: 'Outfit', sans-serif; background-color: #0f172a; color: #e2e8f0; margin: 0; overflow-x: hidden; }
         
-        /* --- CSS Animations (Replacement for Framer Motion) --- */
+        /* --- CSS Animations --- */
         .fade-in { animation: fadeIn 0.8s ease-out forwards; opacity: 0; }
         .slide-up { animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; transform: translateY(40px); }
         .float { animation: float 6s ease-in-out infinite; }
-        .pulse-slow { animation: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        .pulse-glow { animation: pulseGlow 2s infinite alternate; }
+        .neon-text { text-shadow: 0 0 10px rgba(52, 211, 153, 0.5), 0 0 20px rgba(52, 211, 153, 0.3); }
+        .neon-border { box-shadow: 0 0 15px rgba(52, 211, 153, 0.2), inset 0 0 10px rgba(52, 211, 153, 0.1); }
 
         @keyframes fadeIn { to { opacity: 1; } }
         @keyframes slideUp { to { opacity: 1; transform: translateY(0); } }
-        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-20px); } }
-        @keyframes pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.6; } }
+        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-15px); } }
+        @keyframes pulseGlow { from { opacity: 0.8; box-shadow: 0 0 10px rgba(52, 211, 153, 0.2); } to { opacity: 1; box-shadow: 0 0 20px rgba(52, 211, 153, 0.6); } }
 
         /* 3D Tilt Container */
         .tilt-card {
@@ -42,7 +44,7 @@
             transform-style: preserve-3d;
         }
         
-        /* Slider Styling */
+        /* Slider Styling (Neon) */
         input[type=range] {
             -webkit-appearance: none;
             width: 100%;
@@ -53,18 +55,24 @@
             height: 20px;
             width: 20px;
             border-radius: 50%;
-            background: #10b981;
+            background: #34d399;
             cursor: pointer;
             margin-top: -8px;
-            box-shadow: 0 2px 6px rgba(16,185,129,0.4);
+            box-shadow: 0 0 10px #34d399;
         }
         input[type=range]::-webkit-slider-runnable-track {
             width: 100%;
             height: 4px;
             cursor: pointer;
-            background: #e5e7eb;
+            background: #334155;
             border-radius: 2px;
         }
+
+        /* Scrollbar for theory section */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1e293b; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
     </style>
 </head>
 <body>
@@ -75,25 +83,27 @@
 
         // --- Icons ---
         const Icons = {
-            Brain: () => <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"/></svg>,
+            Brain: () => <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"/></svg>,
             ArrowRight: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>,
-            Trophy: () => <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-yellow-500"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>,
-            Loader: () => <svg className="animate-spin" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+            Trophy: () => <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-yellow-400 filter drop-shadow-[0_0_10px_rgba(250,204,21,0.5)]"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>,
+            Loader: () => <svg className="animate-spin text-emerald-400" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>,
+            Check: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>,
+            Cross: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         };
 
-        // --- Setup View (3D Design) ---
-        const SetupView = ({ onGenerate, loading, error }) => {
+        // --- Setup View (Dark Neon) ---
+        const SetupView = ({ onGenerate, loading, error, progressText }) => {
             const [mode, setMode] = useState('topic');
             const [topic, setTopic] = useState('');
             const [difficulty, setDifficulty] = useState('Medium');
-            const [numQuestions, setNumQuestions] = useState(5); // Default 5 questions
+            const [numQuestions, setNumQuestions] = useState(5);
             const [fileName, setFileName] = useState('');
             const [sourceText, setSourceText] = useState('');
             
             const fileRef = useRef(null);
             const cardRef = useRef(null);
 
-            // 3D Tilt Effect (Pure JS)
+            // 3D Tilt Effect
             const handleMouseMove = (e) => {
                 if (!cardRef.current) return;
                 const rect = cardRef.current.getBoundingClientRect();
@@ -101,24 +111,19 @@
                 const y = e.clientY - rect.top;
                 const centerX = rect.width / 2;
                 const centerY = rect.height / 2;
-                
-                const rotateX = ((y - centerY) / 30) * -1; // Invert axis
-                const rotateY = (x - centerX) / 30;
-
+                const rotateX = ((y - centerY) / 40) * -1;
+                const rotateY = (x - centerX) / 40;
                 cardRef.current.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
             };
 
             const handleMouseLeave = () => {
-                if (cardRef.current) {
-                    cardRef.current.style.transform = `perspective(1000px) rotateX(0deg) rotateY(0deg)`;
-                }
+                if (cardRef.current) cardRef.current.style.transform = `perspective(1000px) rotateX(0deg) rotateY(0deg)`;
             };
 
             const handleFile = async (e) => {
                 const file = e.target.files?.[0];
                 if (!file) return;
                 setFileName(file.name);
-
                 if (file.type === 'application/pdf') {
                     try {
                         const arrayBuffer = await file.arrayBuffer();
@@ -142,28 +147,30 @@
 
             return (
                 <div className="min-h-screen flex items-center justify-center relative overflow-hidden p-4" onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}>
-                     {/* Background FX */}
-                     <div className="absolute inset-0 -z-10 bg-gradient-to-br from-[#86efac] via-[#bbf7d0] to-white fade-in"></div>
-                     <div className="absolute -top-16 left-24 w-72 h-72 rounded-full bg-emerald-300 blur-[120px] opacity-40 float"></div>
-                     <div className="absolute bottom-0 right-0 w-80 h-80 rounded-full bg-green-500 blur-[120px] opacity-30 float" style={{animationDelay: '1s'}}></div>
+                     {/* Dark Neon Background */}
+                     <div className="absolute inset-0 -z-10 bg-slate-900">
+                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(16,185,129,0.1),transparent_50%)]"></div>
+                     </div>
+                     <div className="absolute -top-20 left-10 w-72 h-72 rounded-full bg-emerald-500 blur-[120px] opacity-20 float"></div>
+                     <div className="absolute bottom-0 right-0 w-96 h-96 rounded-full bg-blue-500 blur-[120px] opacity-20 float" style={{animationDelay: '1s'}}></div>
 
                      <div ref={cardRef} className="max-w-3xl w-full tilt-card slide-up">
-                        <div className="bg-white/70 backdrop-blur-xl rounded-3xl shadow-[0_20px_60px_rgba(16,185,129,0.25)] border border-white/40 overflow-hidden">
+                        <div className="bg-slate-800/60 backdrop-blur-xl rounded-3xl shadow-[0_0_40px_rgba(16,185,129,0.15)] border border-slate-700 neon-border overflow-hidden">
                             
                             {/* Header */}
-                            <div className="p-8 flex items-center justify-between bg-white/50 backdrop-blur-md border-b border-white/40">
+                            <div className="p-8 flex items-center justify-between border-b border-slate-700/50">
                                 <div className="flex items-center gap-4">
-                                    <div className="w-14 h-14 bg-gradient-to-br from-emerald-500 to-green-600 rounded-2xl shadow-xl flex items-center justify-center float">
+                                    <div className="w-14 h-14 bg-slate-700/50 rounded-2xl flex items-center justify-center float border border-slate-600">
                                         <Icons.Brain />
                                     </div>
                                     <div>
-                                        <h1 className="text-3xl font-black text-gray-800">GenQuiz AI</h1>
-                                        <p className="text-sm text-gray-500 -mt-1">3D • Interactive • Fast</p>
+                                        <h1 className="text-3xl font-black text-white tracking-tight neon-text">GenQuiz AI</h1>
+                                        <p className="text-sm text-emerald-400 font-medium">Neon Edition • 2.5 Pro</p>
                                     </div>
                                 </div>
-                                <div className="hidden md:flex items-center gap-2 select-none">
+                                <div className="hidden md:flex items-center gap-2 select-none bg-slate-900/50 p-1 rounded-full border border-slate-700">
                                     {['Easy', 'Medium', 'Hard'].map(d => (
-                                        <button key={d} onClick={() => setDifficulty(d)} className={`px-4 py-2 rounded-full text-sm font-semibold transition border ${difficulty===d ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-600 border-gray-200'}`}>
+                                        <button key={d} onClick={() => setDifficulty(d)} className={`px-4 py-1.5 rounded-full text-xs font-bold transition ${difficulty===d ? 'bg-emerald-500 text-slate-900 shadow-lg shadow-emerald-500/20' : 'text-slate-400 hover:text-white'}`}>
                                             {d}
                                         </button>
                                     ))}
@@ -171,81 +178,84 @@
                             </div>
 
                             {/* Main Grid */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-8">
-                                {/* Left Side */}
-                                <div className="p-6 bg-white/70 backdrop-blur-xl rounded-2xl shadow-lg border border-emerald-100 flex flex-col justify-between">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 p-8">
+                                {/* Left Side - Controls */}
+                                <div className="flex flex-col justify-between">
                                     <div>
                                         <div className="flex justify-between items-center mb-6">
-                                            <h2 className="font-bold text-gray-700">Select Mode</h2>
-                                            <div className="flex gap-2 bg-gray-100 p-1 rounded-full">
-                                                <button onClick={()=>setMode('topic')} className={`px-4 py-1.5 rounded-full text-sm font-bold transition ${mode==='topic'? 'bg-emerald-600 text-white shadow-md':'text-gray-500'}`}>Topic</button>
-                                                <button onClick={()=>setMode('file')} className={`px-4 py-1.5 rounded-full text-sm font-bold transition ${mode==='file'? 'bg-emerald-600 text-white shadow-md':'text-gray-500'}`}>File</button>
+                                            <h2 className="font-bold text-slate-300 text-sm uppercase tracking-wider">Select Mode</h2>
+                                            <div className="flex gap-1 bg-slate-900 p-1 rounded-lg border border-slate-700">
+                                                <button onClick={()=>setMode('topic')} className={`px-4 py-1.5 rounded-md text-xs font-bold transition ${mode==='topic'? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50':'text-slate-500 hover:text-slate-300'}`}>Topic</button>
+                                                <button onClick={()=>setMode('file')} className={`px-4 py-1.5 rounded-md text-xs font-bold transition ${mode==='file'? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50':'text-slate-500 hover:text-slate-300'}`}>File</button>
                                             </div>
                                         </div>
 
                                         {mode === 'topic' ? (
                                             <div className="fade-in">
-                                                <label className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-2 block">Enter Topic</label>
+                                                <label className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-2 block">Enter Topic</label>
                                                 <input 
                                                     value={topic} 
                                                     onChange={(e)=>setTopic(e.target.value)} 
-                                                    placeholder="e.g. Thermodynamics..." 
-                                                    className="w-full p-4 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-emerald-400 outline-none font-medium" 
+                                                    placeholder="e.g. Quantum Mechanics..." 
+                                                    className="w-full p-4 rounded-xl bg-slate-900/50 border border-slate-700 text-white placeholder-slate-600 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none transition" 
                                                 />
                                             </div>
                                         ) : (
                                             <div className="fade-in">
-                                                <label className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-2 block">Upload PDF / TXT</label>
-                                                <div onClick={()=>fileRef.current.click()} className={`p-6 rounded-xl border-2 border-dashed text-center cursor-pointer transition ${fileName ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-gray-300 hover:border-emerald-400 hover:bg-gray-50 text-gray-500'}`}>
-                                                    <span className="font-bold text-sm">{fileName || 'Tap to Upload'}</span>
+                                                <label className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-2 block">Upload Document</label>
+                                                <div onClick={()=>fileRef.current.click()} className={`p-6 rounded-xl border-2 border-dashed text-center cursor-pointer transition ${fileName ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400' : 'border-slate-700 bg-slate-900/30 hover:border-slate-600 text-slate-500'}`}>
+                                                    <span className="font-bold text-sm">{fileName || 'Click to Upload PDF/TXT'}</span>
                                                 </div>
                                                 <input type="file" className="hidden" ref={fileRef} accept=".pdf,.txt" onChange={handleFile} />
                                             </div>
                                         )}
                                     </div>
                                     
-                                    {/* Question Count Slider */}
                                     <div className="mt-6 fade-in">
                                         <div className="flex justify-between items-center mb-2">
-                                            <label className="text-xs text-gray-500 font-bold uppercase tracking-wider">Questions: <span className="text-emerald-600 text-sm">{numQuestions}</span></label>
+                                            <label className="text-xs text-slate-400 font-bold uppercase tracking-wider">Questions: <span className="text-emerald-400">{numQuestions}</span></label>
                                         </div>
-                                        <input 
-                                            type="range" 
-                                            min="3" 
-                                            max="15" 
-                                            value={numQuestions} 
-                                            onChange={(e) => setNumQuestions(parseInt(e.target.value))}
-                                            className="w-full accent-emerald-500"
-                                        />
-                                        <div className="flex justify-between text-[10px] text-gray-400 mt-1">
-                                            <span>3</span>
-                                            <span>15</span>
-                                        </div>
+                                        <input type="range" min="3" max="15" value={numQuestions} onChange={(e) => setNumQuestions(parseInt(e.target.value))} className="w-full" />
                                     </div>
 
-                                    {error && <div className="mt-4 text-xs text-red-500 bg-red-50 p-2 rounded-lg text-center">{error}</div>}
+                                    {error && <div className="mt-4 text-xs text-red-400 bg-red-900/20 border border-red-900/50 p-2 rounded-lg text-center">{error}</div>}
 
                                     <button 
-                                        className="mt-6 w-full py-4 bg-emerald-600 text-white font-bold rounded-xl shadow-lg hover:bg-emerald-700 flex justify-center items-center gap-2 transition transform active:scale-95 disabled:opacity-70"
+                                        className="mt-6 w-full py-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold rounded-xl shadow-lg shadow-emerald-900/50 hover:shadow-emerald-500/20 flex justify-center items-center gap-2 transition transform active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed"
                                         onClick={() => onGenerate({ mode, topic, sourceText, difficulty, numQuestions })}
                                         disabled={loading}
                                     >
                                         {loading ? <Icons.Loader /> : "Generate Quiz"}
                                     </button>
+
+                                    {/* AI Progress Bar */}
+                                    {loading && (
+                                        <div className="mt-4 fade-in">
+                                            <div className="flex justify-between text-[10px] text-emerald-400 font-bold mb-1 uppercase tracking-widest">
+                                                <span>AI Status</span>
+                                                <span className="animate-pulse">{progressText}</span>
+                                            </div>
+                                            <div className="h-1.5 w-full bg-slate-700 rounded-full overflow-hidden">
+                                                <div className="h-full bg-emerald-500 rounded-full animate-[progress_2s_ease-in-out_infinite] w-1/3"></div>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
 
-                                {/* Right Side (Preview) */}
-                                <div className="p-6 rounded-2xl bg-white/60 backdrop-blur-xl border border-emerald-100 shadow-lg hidden md:block">
-                                    <h2 className="font-bold text-gray-700 mb-3">Live Preview</h2>
-                                    <div className="p-4 rounded-xl border bg-gradient-to-r from-white to-emerald-50">
-                                        <p className="font-semibold text-gray-800 text-sm mb-3">Q1: {topic ? `Questions about "${topic}"` : "Your question here..."}</p>
-                                        <div className="space-y-2 text-xs">
-                                            <div className="p-2 bg-white rounded-lg border text-gray-400">A. Option 1</div>
-                                            <div className="p-2 bg-emerald-100 rounded-lg border border-emerald-300 text-emerald-800 font-bold">B. Correct Answer</div>
-                                            <div className="p-2 bg-white rounded-lg border text-gray-400">C. Option 3</div>
+                                {/* Right Side - Decorative Preview */}
+                                <div className="hidden md:flex flex-col justify-center relative p-6 rounded-2xl bg-slate-900/50 border border-slate-700/50">
+                                    <div className="absolute inset-0 bg-grid-slate-800/[0.1] rounded-2xl"></div>
+                                    <div className="relative space-y-4 opacity-50">
+                                        <div className="h-4 w-3/4 bg-slate-700 rounded animate-pulse"></div>
+                                        <div className="space-y-2">
+                                            <div className="h-10 w-full bg-slate-800 rounded border border-slate-700"></div>
+                                            <div className="h-10 w-full bg-emerald-900/30 border border-emerald-500/30 rounded"></div>
+                                            <div className="h-10 w-full bg-slate-800 rounded border border-slate-700"></div>
                                         </div>
                                     </div>
-                                    <p className="text-xs text-gray-400 mt-4 text-center">AI will generate {numQuestions} questions instantly.</p>
+                                    <div className="absolute inset-0 flex items-center justify-center">
+                                        <p className="text-slate-500 text-xs font-mono uppercase tracking-widest bg-slate-900 px-3 py-1 rounded-full border border-slate-800">AI Model Ready</p>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -254,52 +264,62 @@
             );
         };
 
-        // --- Quiz View ---
+        // --- Quiz View (Dark Neon) ---
         const QuizView = ({ quizData, currentQ, answers, onAnswer, score, onNext, onQuit }) => {
             const q = quizData[currentQ];
             const answered = answers[currentQ];
             const progress = ((currentQ + 1) / quizData.length) * 100;
             
             return (
-                <div className="min-h-screen flex items-center justify-center p-4">
-                    <div className="max-w-2xl w-full bg-white/90 backdrop-blur-xl shadow-2xl rounded-[2rem] overflow-hidden border border-emerald-100 slide-up">
-                        <div className="h-2 bg-gray-100 w-full">
-                            <div className="h-full bg-emerald-500 transition-all duration-500" style={{ width: `${progress}%` }}></div>
+                <div className="min-h-screen flex items-center justify-center p-4 bg-slate-900">
+                    <div className="max-w-2xl w-full bg-slate-800/80 backdrop-blur-xl shadow-2xl rounded-[2rem] overflow-hidden border border-slate-700 slide-up">
+                        {/* Progress Bar */}
+                        <div className="h-1.5 bg-slate-700 w-full">
+                            <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-500 shadow-[0_0_10px_#34d399]" style={{ width: `${progress}%` }}></div>
                         </div>
+                        
                         <div className="p-8">
-                            <div className="flex justify-between items-center mb-6">
-                                <span className="text-xs font-bold text-emerald-600 bg-emerald-100 px-3 py-1 rounded-full uppercase tracking-wider">Question {currentQ + 1} of {quizData.length}</span>
-                                <button onClick={onQuit} className="text-gray-400 hover:text-red-500 font-bold text-xs uppercase">Quit</button>
+                            <div className="flex justify-between items-center mb-8">
+                                <span className="text-[10px] font-bold text-emerald-400 bg-emerald-900/30 px-3 py-1 rounded-full uppercase tracking-widest border border-emerald-500/20">
+                                    Question {currentQ + 1} <span className="text-slate-500">/ {quizData.length}</span>
+                                </span>
+                                <button onClick={onQuit} className="text-slate-500 hover:text-red-400 font-bold text-[10px] uppercase tracking-widest transition">Quit</button>
                             </div>
-                            <h2 className="text-2xl font-bold text-gray-800 mb-8 leading-snug">{q.question}</h2>
+
+                            <h2 className="text-2xl font-bold text-white mb-8 leading-snug">{q.question}</h2>
+                            
                             <div className="space-y-3">
                                 {q.options.map((opt, i) => {
                                     const isSelected = answers[currentQ] === opt;
                                     const isCorrect = opt === q.correctAnswer;
-                                    let style = "w-full p-5 rounded-xl text-left font-medium border-2 transition-all ";
+                                    let style = "w-full p-5 rounded-xl text-left font-medium border transition-all duration-200 ";
                                     
                                     if (answered) {
-                                        if (isCorrect) style += "border-emerald-500 bg-emerald-50 text-emerald-800";
-                                        else if (isSelected) style += "border-red-400 bg-red-50 text-red-800";
-                                        else style += "border-gray-100 text-gray-300";
+                                        if (isCorrect) style += "border-emerald-500 bg-emerald-500/20 text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.2)]";
+                                        else if (isSelected) style += "border-red-500 bg-red-500/20 text-red-300";
+                                        else style += "border-slate-700 bg-slate-800/50 text-slate-500 opacity-50";
                                     } else {
-                                        style += "border-gray-100 hover:border-emerald-400 hover:bg-white text-gray-600 bg-gray-50/50";
+                                        style += "border-slate-700 bg-slate-800/50 text-slate-300 hover:border-emerald-500 hover:bg-slate-800 hover:text-emerald-400 hover:shadow-[0_0_15px_rgba(16,185,129,0.1)]";
                                     }
 
                                     return <button key={i} disabled={!!answered} onClick={() => onAnswer(opt)} className={style}>{opt}</button>;
                                 })}
                             </div>
+
                             {answered && (
-                                <div className="mt-6 p-5 bg-blue-50 text-blue-900 rounded-2xl border border-blue-100 text-sm fade-in">
-                                    <strong className="block text-blue-600 text-xs uppercase tracking-wider mb-1">Insight</strong>
-                                    {q.explanation}
+                                <div className="mt-8 p-5 bg-blue-900/20 text-blue-200 rounded-2xl border border-blue-500/30 text-sm fade-in">
+                                    <strong className="block text-blue-400 text-[10px] uppercase tracking-wider mb-2 flex items-center gap-2">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span> Theory Insight
+                                    </strong>
+                                    <p className="leading-relaxed opacity-90">{q.explanation}</p>
                                 </div>
                             )}
                         </div>
-                        <div className="p-6 bg-white border-t border-gray-100 flex justify-end">
+                        
+                        <div className="p-6 bg-slate-800 border-t border-slate-700 flex justify-end">
                             {answered && (
-                                <button onClick={onNext} className="px-8 py-3 bg-emerald-600 text-white rounded-xl font-bold shadow-lg hover:bg-emerald-700 flex items-center gap-2 transition transform active:scale-95">
-                                    {currentQ < quizData.length - 1 ? "Next" : "See Results"} <Icons.ArrowRight />
+                                <button onClick={onNext} className="px-8 py-3 bg-emerald-500 text-slate-900 rounded-xl font-bold shadow-lg hover:bg-emerald-400 flex items-center gap-2 transition transform active:scale-95">
+                                    {currentQ < quizData.length - 1 ? "Next Question" : "Finish Quiz"} <Icons.ArrowRight />
                                 </button>
                             )}
                         </div>
@@ -308,21 +328,72 @@
             );
         };
 
-        // --- Result View ---
-        const ResultView = ({ score, total, onRetry }) => (
-            <div className="min-h-screen flex items-center justify-center p-4">
-                <div className="max-w-md w-full bg-white/90 backdrop-blur-xl shadow-2xl rounded-[2.5rem] p-10 text-center border border-emerald-100 relative overflow-hidden slide-up">
-                    <div className="w-24 h-24 bg-yellow-50 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner float">
-                        <Icons.Trophy />
+        // --- Result View with Detailed Analysis ---
+        const ResultView = ({ score, total, quizData, userAnswers, onRetry }) => {
+            const percentage = Math.round((score / total) * 100);
+            
+            return (
+                <div className="min-h-screen bg-slate-900 p-6">
+                    <div className="max-w-4xl mx-auto slide-up">
+                        
+                        {/* Score Card */}
+                        <div className="bg-slate-800/80 backdrop-blur-xl rounded-[2.5rem] p-10 text-center border border-slate-700 shadow-2xl mb-8 relative overflow-hidden">
+                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-blue-500"></div>
+                            <div className="w-24 h-24 bg-slate-900/50 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner border border-slate-700 float">
+                                <Icons.Trophy />
+                            </div>
+                            <h2 className="text-7xl font-black text-white mb-2 tracking-tighter neon-text">{percentage}%</h2>
+                            <p className="text-slate-400 font-medium text-lg mb-8">You scored <span className="text-white font-bold">{score}</span> out of {total}</p>
+                            
+                            <button onClick={onRetry} className="px-10 py-4 bg-slate-700 hover:bg-slate-600 text-white rounded-2xl font-bold shadow-lg transition transform hover:scale-105">
+                                Create New Quiz
+                            </button>
+                        </div>
+
+                        {/* Detailed Analysis Section */}
+                        <div className="space-y-6">
+                            <h3 className="text-emerald-400 font-bold uppercase tracking-widest text-sm text-center mb-6">Knowledge Breakdown</h3>
+                            
+                            {quizData.map((q, index) => {
+                                const userAns = userAnswers[index];
+                                const isCorrect = userAns === q.correctAnswer;
+                                
+                                return (
+                                    <div key={index} className={`bg-slate-800/60 rounded-2xl p-6 border ${isCorrect ? 'border-emerald-500/30' : 'border-red-500/30'}`}>
+                                        <div className="flex items-start gap-4">
+                                            <div className={`mt-1 w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${isCorrect ? 'bg-emerald-500/20' : 'bg-red-500/20'}`}>
+                                                {isCorrect ? <Icons.Check /> : <Icons.Cross />}
+                                            </div>
+                                            <div className="w-full">
+                                                <h4 className="text-lg font-bold text-white mb-4">{q.question}</h4>
+                                                
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                                    <div className={`p-3 rounded-lg text-sm border ${isCorrect ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-300' : 'bg-red-500/10 border-red-500/50 text-red-300'}`}>
+                                                        <span className="block text-[10px] uppercase font-bold opacity-70 mb-1">Your Answer</span>
+                                                        {userAns}
+                                                    </div>
+                                                    {!isCorrect && (
+                                                        <div className="p-3 rounded-lg text-sm bg-slate-700/50 border border-slate-600 text-slate-300">
+                                                            <span className="block text-[10px] uppercase font-bold opacity-70 mb-1 text-emerald-400">Correct Answer</span>
+                                                            {q.correctAnswer}
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50">
+                                                    <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider block mb-2">Theory & Explanation</span>
+                                                    <p className="text-sm text-slate-300 leading-relaxed">{q.explanation}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
                     </div>
-                    <h2 className="text-6xl font-black text-emerald-600 mb-2">{Math.round((score/total)*100)}%</h2>
-                    <p className="text-gray-400 font-medium mb-8">You scored {score} out of {total}</p>
-                    <button onClick={onRetry} className="w-full py-4 bg-gray-900 text-white rounded-2xl font-bold shadow-xl hover:bg-black transition transform hover:scale-[1.02]">
-                        Create New Quiz
-                    </button>
                 </div>
-            </div>
-        );
+            );
+        };
 
         // --- App Component ---
         const App = () => {
@@ -333,6 +404,19 @@
             const [answers, setAnswers] = useState({});
             const [loading, setLoading] = useState(false);
             const [error, setError] = useState('');
+            const [progressText, setProgressText] = useState('Initializing');
+
+            // Fake progress animation texts
+            useEffect(() => {
+                if (!loading) return;
+                const texts = ["Analyzing Topic...", "Consulting Gemini AI...", "Drafting Questions...", "Reviewing Answers...", "Finalizing Quiz..."];
+                let i = 0;
+                const interval = setInterval(() => {
+                    setProgressText(texts[i % texts.length]);
+                    i++;
+                }, 800);
+                return () => clearInterval(interval);
+            }, [loading]);
 
             const generateQuiz = async ({ mode, topic, sourceText, difficulty, numQuestions }) => {
                 if (mode === 'topic' && !topic) return setError("Please enter a topic");
@@ -379,7 +463,7 @@
 
             return (
                 <React.Fragment>
-                    {view === 'setup' && <SetupView onGenerate={generateQuiz} loading={loading} error={error} />}
+                    {view === 'setup' && <SetupView onGenerate={generateQuiz} loading={loading} error={error} progressText={progressText} />}
                     {view === 'quiz' && (
                         <QuizView 
                             quizData={quizData} 
@@ -391,7 +475,7 @@
                             onQuit={() => setView('setup')}
                         />
                     )}
-                    {view === 'result' && <ResultView score={score} total={quizData.length} onRetry={() => setView('setup')} />}
+                    {view === 'result' && <ResultView score={score} total={quizData.length} quizData={quizData} userAnswers={answers} onRetry={() => setView('setup')} />}
                 </React.Fragment>
             );
         };

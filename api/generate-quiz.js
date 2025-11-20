@@ -22,10 +22,9 @@ module.exports = async (req, res) => {
     
     if (sourceText) {
         // DOCUMENT MODE PROMPT
-        // Truncate text to avoid payload limits
         const truncatedText = sourceText.substring(0, 25000);
         
-        systemInstruction = `You are a strict quiz generator.
+        systemInstruction = `You are an expert tutor and quiz generator.
         SOURCE MATERIAL:
         """
         ${truncatedText}
@@ -36,7 +35,7 @@ module.exports = async (req, res) => {
         `;
     } else {
         // TOPIC MODE PROMPT
-        systemInstruction = `You are a strict quiz generator.
+        systemInstruction = `You are an expert tutor and quiz generator.
         TOPIC: "${topic}"
         TASK: Generate exactly ${count} multiple choice questions about this topic.
         Difficulty: ${difficulty}
@@ -47,7 +46,7 @@ module.exports = async (req, res) => {
     
     OUTPUT REQUIREMENTS:
     - Return ONLY a raw JSON array.
-    - Format: [{"question": "...", "options": ["A","B","C","D"], "correctAnswer": "A", "explanation": "..."}]
+    - Format: [{"question": "...", "options": ["A","B","C","D"], "correctAnswer": "A", "explanation": "Detailed theory explaining why this answer is correct and providing context for learning."}]
     - No markdown, no \`\`\`json tags.
     - Make sure to generate exactly ${count} questions.`;
 
