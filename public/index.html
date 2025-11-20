@@ -5,46 +5,51 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>GenQuiz AI - 3D Experience</title>
     
-    <!-- Styling -->
+    <!-- React & ReactDOM (Stable UMD Version) -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- PDF.js (Global Script) -->
+    <!-- PDF.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script>
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     </script>
 
-    <!-- Import Map: Ye ensure karega ki React aur Framer Motion same version use karein -->
-    <script type="importmap">
-        {
-            "imports": {
-                "react": "https://esm.sh/react@18.2.0",
-                "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
-                "framer-motion": "https://esm.sh/framer-motion@10.16.4"
-            }
-        }
-    </script>
-
-    <!-- Babel for JSX -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap');
         body { font-family: 'Poppins', sans-serif; background-color: #e9fff0; margin: 0; overflow-x: hidden; }
         
-        /* Custom Utility for 3D */
-        .preserve-3d { transform-style: preserve-3d; }
+        /* --- CSS Animations (Replacement for Framer Motion) --- */
+        .fade-in { animation: fadeIn 0.8s ease-out forwards; opacity: 0; }
+        .slide-up { animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; transform: translateY(40px); }
+        .float { animation: float 6s ease-in-out infinite; }
+        .pulse-slow { animation: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+
+        @keyframes fadeIn { to { opacity: 1; } }
+        @keyframes slideUp { to { opacity: 1; transform: translateY(0); } }
+        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-20px); } }
+        @keyframes pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.6; } }
+
+        /* 3D Tilt Container */
+        .tilt-card {
+            transition: transform 0.1s ease-out;
+            transform-style: preserve-3d;
+        }
     </style>
 </head>
 <body>
     <div id="root"></div>
 
-    <script type="text/babel" data-type="module">
-        import React, { useState, useRef, useEffect } from 'react';
-        import { createRoot } from 'react-dom/client';
-        import { motion, AnimatePresence } from 'framer-motion';
+    <script type="text/babel">
+        const { useState, useRef, useEffect } = React;
 
-        // --- Icons Object (Reused for cleaner code) ---
+        // --- Icons ---
         const Icons = {
             Brain: () => <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"/></svg>,
             ArrowRight: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>,
@@ -52,7 +57,7 @@
             Loader: () => <svg className="animate-spin" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
         };
 
-        // --- 1. SETUP VIEW (Your New 3D Design) ---
+        // --- Setup View (3D Design) ---
         const SetupView = ({ onGenerate, loading, error }) => {
             const [mode, setMode] = useState('topic');
             const [topic, setTopic] = useState('');
@@ -61,25 +66,28 @@
             const [sourceText, setSourceText] = useState('');
             
             const fileRef = useRef(null);
-            const wrapperRef = useRef(null);
-            const [mouse, setMouse] = useState({ x: 0, y: 0 });
+            const cardRef = useRef(null);
 
-            // 3D Tilt Logic
-            function cardTilt() {
-                const rect = wrapperRef.current?.getBoundingClientRect();
-                if (!rect) return {};
-                const dx = mouse.x - (rect.left + rect.width / 2);
-                const dy = mouse.y - (rect.top + rect.height / 2);
-                return {
-                    transform: `perspective(1400px) rotateX(${-(dy / 40)}deg) rotateY(${dx / 40}deg)`
-                };
-            }
+            // 3D Tilt Effect (Pure JS)
+            const handleMouseMove = (e) => {
+                if (!cardRef.current) return;
+                const rect = cardRef.current.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                const centerX = rect.width / 2;
+                const centerY = rect.height / 2;
+                
+                const rotateX = ((y - centerY) / 30) * -1; // Invert axis
+                const rotateY = (x - centerX) / 30;
 
-            useEffect(() => {
-                const move = (e) => setMouse({ x: e.clientX, y: e.clientY });
-                window.addEventListener('mousemove', move);
-                return () => window.removeEventListener('mousemove', move);
-            }, []);
+                cardRef.current.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
+            };
+
+            const handleMouseLeave = () => {
+                if (cardRef.current) {
+                    cardRef.current.style.transform = `perspective(1000px) rotateX(0deg) rotateY(0deg)`;
+                }
+            };
 
             const handleFile = async (e) => {
                 const file = e.target.files?.[0];
@@ -87,46 +95,42 @@
                 setFileName(file.name);
 
                 if (file.type === 'application/pdf') {
-                    const arrayBuffer = await file.arrayBuffer();
-                    // Using global pdfjsLib
-                    const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-                    let fullText = "";
-                    const maxPages = Math.min(pdf.numPages, 15); 
-                    for (let i = 1; i <= maxPages; i++) {
-                        const page = await pdf.getPage(i);
-                        const textContent = await page.getTextContent();
-                        fullText += textContent.items.map(item => item.str).join(' ') + "\n";
+                    try {
+                        const arrayBuffer = await file.arrayBuffer();
+                        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                        let fullText = "";
+                        const maxPages = Math.min(pdf.numPages, 15); 
+                        for (let i = 1; i <= maxPages; i++) {
+                            const page = await pdf.getPage(i);
+                            const textContent = await page.getTextContent();
+                            fullText += textContent.items.map(item => item.str).join(' ') + "\n";
+                        }
+                        setSourceText(fullText);
+                    } catch (err) {
+                        alert("Error reading PDF: " + err.message);
                     }
-                    setSourceText(fullText);
                 } else {
                     const text = await file.text();
                     setSourceText(text);
                 }
             };
 
-            const handleSubmit = () => {
-                onGenerate({ mode, topic, sourceText, difficulty });
-            };
-
             return (
-                <div className="min-h-screen flex items-center justify-center relative overflow-hidden p-4">
+                <div className="min-h-screen flex items-center justify-center relative overflow-hidden p-4" onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}>
                      {/* Background FX */}
-                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 0.55 }} transition={{ duration: 1.2 }} className="absolute inset-0 -z-10 bg-gradient-to-br from-[#86efac] via-[#bbf7d0] to-white" />
-                     <div className="absolute -top-16 left-24 w-72 h-72 rounded-full bg-emerald-300 blur-[120px] opacity-40" />
-                     <div className="absolute bottom-0 right-0 w-80 h-80 rounded-full bg-green-500 blur-[120px] opacity-30" />
+                     <div className="absolute inset-0 -z-10 bg-gradient-to-br from-[#86efac] via-[#bbf7d0] to-white fade-in"></div>
+                     <div className="absolute -top-16 left-24 w-72 h-72 rounded-full bg-emerald-300 blur-[120px] opacity-40 float"></div>
+                     <div className="absolute bottom-0 right-0 w-80 h-80 rounded-full bg-green-500 blur-[120px] opacity-30 float" style={{animationDelay: '1s'}}></div>
 
-                     <motion.div ref={wrapperRef} className="max-w-3xl w-full" style={{ perspective: '1400px' }}>
-                        <motion.div 
-                            style={cardTilt()} 
-                            transition={{ type: 'spring', stiffness: 100, damping: 15 }} 
-                            className="bg-white/70 backdrop-blur-xl rounded-3xl shadow-[0_20px_60px_rgba(16,185,129,0.25)] border border-white/40 overflow-hidden"
-                        >
-                            {/* HEADER */}
+                     <div ref={cardRef} className="max-w-3xl w-full tilt-card slide-up">
+                        <div className="bg-white/70 backdrop-blur-xl rounded-3xl shadow-[0_20px_60px_rgba(16,185,129,0.25)] border border-white/40 overflow-hidden">
+                            
+                            {/* Header */}
                             <div className="p-8 flex items-center justify-between bg-white/50 backdrop-blur-md border-b border-white/40">
                                 <div className="flex items-center gap-4">
-                                    <motion.div animate={{ rotate: [0, 6, -6, 0] }} transition={{ repeat: Infinity, duration: 6 }} className="w-14 h-14 bg-gradient-to-br from-emerald-500 to-green-600 rounded-2xl shadow-xl flex items-center justify-center">
+                                    <div className="w-14 h-14 bg-gradient-to-br from-emerald-500 to-green-600 rounded-2xl shadow-xl flex items-center justify-center float">
                                         <Icons.Brain />
-                                    </motion.div>
+                                    </div>
                                     <div>
                                         <h1 className="text-3xl font-black text-gray-800">GenQuiz AI</h1>
                                         <p className="text-sm text-gray-500 -mt-1">3D • Interactive • Fast</p>
@@ -141,10 +145,10 @@
                                 </div>
                             </div>
 
-                            {/* MAIN GRID */}
+                            {/* Main Grid */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-8">
-                                {/* LEFT */}
-                                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="p-6 bg-white/70 backdrop-blur-xl rounded-2xl shadow-lg border border-emerald-100 flex flex-col justify-between">
+                                {/* Left Side */}
+                                <div className="p-6 bg-white/70 backdrop-blur-xl rounded-2xl shadow-lg border border-emerald-100 flex flex-col justify-between">
                                     <div>
                                         <div className="flex justify-between items-center mb-6">
                                             <h2 className="font-bold text-gray-700">Select Mode</h2>
@@ -154,8 +158,8 @@
                                             </div>
                                         </div>
 
-                                        {mode === 'topic' && (
-                                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                                        {mode === 'topic' ? (
+                                            <div className="fade-in">
                                                 <label className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-2 block">Enter Topic</label>
                                                 <input 
                                                     value={topic} 
@@ -163,61 +167,60 @@
                                                     placeholder="e.g. Thermodynamics..." 
                                                     className="w-full p-4 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-emerald-400 outline-none font-medium" 
                                                 />
-                                            </motion.div>
-                                        )}
-
-                                        {mode === 'file' && (
-                                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                                            </div>
+                                        ) : (
+                                            <div className="fade-in">
                                                 <label className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-2 block">Upload PDF / TXT</label>
                                                 <div onClick={()=>fileRef.current.click()} className={`p-6 rounded-xl border-2 border-dashed text-center cursor-pointer transition ${fileName ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-gray-300 hover:border-emerald-400 hover:bg-gray-50 text-gray-500'}`}>
                                                     <span className="font-bold text-sm">{fileName || 'Tap to Upload'}</span>
                                                 </div>
                                                 <input type="file" className="hidden" ref={fileRef} accept=".pdf,.txt" onChange={handleFile} />
-                                            </motion.div>
+                                            </div>
                                         )}
                                     </div>
                                     
                                     {error && <div className="mt-4 text-xs text-red-500 bg-red-50 p-2 rounded-lg text-center">{error}</div>}
 
-                                    <motion.button 
-                                        whileTap={{ scale: 0.96 }} 
-                                        className="mt-6 w-full py-4 bg-emerald-600 text-white font-bold rounded-xl shadow-lg hover:bg-emerald-700 flex justify-center items-center gap-2"
-                                        onClick={handleSubmit}
+                                    <button 
+                                        className="mt-6 w-full py-4 bg-emerald-600 text-white font-bold rounded-xl shadow-lg hover:bg-emerald-700 flex justify-center items-center gap-2 transition transform active:scale-95 disabled:opacity-70"
+                                        onClick={() => onGenerate({ mode, topic, sourceText, difficulty })}
                                         disabled={loading}
                                     >
                                         {loading ? <Icons.Loader /> : "Generate Quiz"}
-                                    </motion.button>
-                                </motion.div>
+                                    </button>
+                                </div>
 
-                                {/* RIGHT */}
-                                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="p-6 rounded-2xl bg-white/60 backdrop-blur-xl border border-emerald-100 shadow-lg hidden md:block">
+                                {/* Right Side (Preview) */}
+                                <div className="p-6 rounded-2xl bg-white/60 backdrop-blur-xl border border-emerald-100 shadow-lg hidden md:block">
                                     <h2 className="font-bold text-gray-700 mb-3">Live Preview</h2>
                                     <div className="p-4 rounded-xl border bg-gradient-to-r from-white to-emerald-50">
-                                        <p className="font-semibold text-gray-800 text-sm mb-3">Q1: {topic ? `Questions about "${topic}" will appear here.` : "Your question will appear here..."}</p>
+                                        <p className="font-semibold text-gray-800 text-sm mb-3">Q1: {topic ? `Questions about "${topic}"` : "Your question here..."}</p>
                                         <div className="space-y-2 text-xs">
                                             <div className="p-2 bg-white rounded-lg border text-gray-400">A. Option 1</div>
                                             <div className="p-2 bg-emerald-100 rounded-lg border border-emerald-300 text-emerald-800 font-bold">B. Correct Answer</div>
                                             <div className="p-2 bg-white rounded-lg border text-gray-400">C. Option 3</div>
                                         </div>
                                     </div>
-                                </motion.div>
+                                    <p className="text-xs text-gray-400 mt-4 text-center">AI will generate questions instantly.</p>
+                                </div>
                             </div>
-                        </motion.div>
-                     </motion.div>
+                        </div>
+                     </div>
                 </div>
             );
         };
 
-        // --- 2. QUIZ VIEW ---
+        // --- Quiz View ---
         const QuizView = ({ quizData, currentQ, answers, onAnswer, score, onNext, onQuit }) => {
             const q = quizData[currentQ];
             const answered = answers[currentQ];
+            const progress = ((currentQ + 1) / quizData.length) * 100;
             
             return (
                 <div className="min-h-screen flex items-center justify-center p-4">
-                    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="max-w-2xl w-full bg-white/80 backdrop-blur-xl shadow-2xl rounded-[2rem] overflow-hidden border border-emerald-100">
+                    <div className="max-w-2xl w-full bg-white/90 backdrop-blur-xl shadow-2xl rounded-[2rem] overflow-hidden border border-emerald-100 slide-up">
                         <div className="h-2 bg-gray-100 w-full">
-                            <motion.div className="h-full bg-emerald-500" initial={{ width: 0 }} animate={{ width: `${((currentQ+1)/quizData.length)*100}%` }} />
+                            <div className="h-full bg-emerald-500 transition-all duration-500" style={{ width: `${progress}%` }}></div>
                         </div>
                         <div className="p-8">
                             <div className="flex justify-between items-center mb-6">
@@ -243,29 +246,29 @@
                                 })}
                             </div>
                             {answered && (
-                                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-6 p-5 bg-blue-50 text-blue-900 rounded-2xl border border-blue-100 text-sm">
+                                <div className="mt-6 p-5 bg-blue-50 text-blue-900 rounded-2xl border border-blue-100 text-sm fade-in">
                                     <strong className="block text-blue-600 text-xs uppercase tracking-wider mb-1">Insight</strong>
                                     {q.explanation}
-                                </motion.div>
+                                </div>
                             )}
                         </div>
                         <div className="p-6 bg-white border-t border-gray-100 flex justify-end">
                             {answered && (
-                                <button onClick={onNext} className="px-8 py-3 bg-emerald-600 text-white rounded-xl font-bold shadow-lg hover:bg-emerald-700 flex items-center gap-2">
+                                <button onClick={onNext} className="px-8 py-3 bg-emerald-600 text-white rounded-xl font-bold shadow-lg hover:bg-emerald-700 flex items-center gap-2 transition transform active:scale-95">
                                     {currentQ < quizData.length - 1 ? "Next" : "See Results"} <Icons.ArrowRight />
                                 </button>
                             )}
                         </div>
-                    </motion.div>
+                    </div>
                 </div>
             );
         };
 
-        // --- 3. RESULT VIEW ---
+        // --- Result View ---
         const ResultView = ({ score, total, onRetry }) => (
             <div className="min-h-screen flex items-center justify-center p-4">
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-md w-full bg-white/90 backdrop-blur-xl shadow-2xl rounded-[2.5rem] p-10 text-center border border-emerald-100 relative overflow-hidden">
-                    <div className="w-24 h-24 bg-yellow-50 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
+                <div className="max-w-md w-full bg-white/90 backdrop-blur-xl shadow-2xl rounded-[2.5rem] p-10 text-center border border-emerald-100 relative overflow-hidden slide-up">
+                    <div className="w-24 h-24 bg-yellow-50 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner float">
                         <Icons.Trophy />
                     </div>
                     <h2 className="text-6xl font-black text-emerald-600 mb-2">{Math.round((score/total)*100)}%</h2>
@@ -273,11 +276,11 @@
                     <button onClick={onRetry} className="w-full py-4 bg-gray-900 text-white rounded-2xl font-bold shadow-xl hover:bg-black transition transform hover:scale-[1.02]">
                         Create New Quiz
                     </button>
-                </motion.div>
+                </div>
             </div>
         );
 
-        // --- APP ORCHESTRATOR ---
+        // --- App Component ---
         const App = () => {
             const [view, setView] = useState('setup');
             const [quizData, setQuizData] = useState([]);
@@ -330,11 +333,10 @@
             };
 
             return (
-                <AnimatePresence mode='wait'>
-                    {view === 'setup' && <SetupView key="setup" onGenerate={generateQuiz} loading={loading} error={error} />}
+                <React.Fragment>
+                    {view === 'setup' && <SetupView onGenerate={generateQuiz} loading={loading} error={error} />}
                     {view === 'quiz' && (
                         <QuizView 
-                            key="quiz"
                             quizData={quizData} 
                             currentQ={currentQ} 
                             answers={answers} 
@@ -344,13 +346,23 @@
                             onQuit={() => setView('setup')}
                         />
                     )}
-                    {view === 'result' && <ResultView key="result" score={score} total={quizData.length} onRetry={() => setView('setup')} />}
-                </AnimatePresence>
+                    {view === 'result' && <ResultView score={score} total={quizData.length} onRetry={() => setView('setup')} />}
+                </React.Fragment>
             );
         };
 
-        const root = createRoot(document.getElementById('root'));
+        const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
 </body>
 </html>
+```
+
+### 🚀 Deploy Kaise Karein:
+
+1.  Is code ko **`public/index.html`** mein paste karo aur save karo.
+2.  Terminal mein wahi commands chalao:
+    ```bash
+    git add .
+    git commit -m "Fix blank screen crash"
+    git push
