@@ -1,205 +1,55 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GenQuiz AI Master</title>
-    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
-        body { font-family: 'Outfit', sans-serif; background: #f0fdf4; }
-        .slide-up { animation: slideUp 0.5s ease-out; }
-        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        .pattern-dots { background-image: radial-gradient(#ffffff 1px, transparent 1px); background-size: 20px 20px; opacity: 0.2; }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GenQuiz AI - Redesigned</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+    body { font-family: 'Poppins', sans-serif; }
+  </style>
 </head>
-<body>
-    <div id="root"></div>
+<body class="bg-gradient-to-br from-green-50 via-white to-green-100">
+  <div id="root"></div>
 
-    <script type="text/babel">
-        const { useState } = React;
+  <script type="text/babel">
+    const App = () => {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center p-6">
+          {/* Logo Section */}
+          <div className="text-center mb-8 animate-fadeIn">
+            <div className="w-20 h-20 rounded-2xl bg-green-600 flex items-center justify-center shadow-xl mb-4 animate-bounceSlow">
+              <span className="text-white text-4xl font-bold">GQ</span>
+            </div>
+            <h1 className="text-4xl font-extrabold text-green-700 tracking-wide drop-shadow-md">GenQuiz AI</h1>
+            <p className="text-gray-600 mt-2">Smart • Fast • Interactive</p>
+          </div>
 
-        // --- Icons Components (Fixed for Browser) ---
-        const Brain = ({ className }) => (
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"/></svg>
-        );
-        const Trophy = ({ className }) => (
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
-        );
-        const ArrowRight = ({ size = 24, className }) => (
-            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-        );
-        const RotateCcw = ({ size = 24, className }) => (
-            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-        );
-        const Loader2 = ({ className }) => (
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-        );
-        const Sparkles = ({ size = 24, className }) => (
-            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M9 3v4"/><path d="M3 5h4"/><path d="M3 9h4"/></svg>
-        );
+          {/* Card */}
+          <div className="bg-white shadow-2xl rounded-3xl p-10 w-full max-w-xl backdrop-blur-xl border border-green-100 animate-slideUp">
+            <h2 className="text-xl font-semibold text-gray-700 mb-4">Start Creating Your Quiz</h2>
 
-        const App = () => {
-            const [view, setView] = useState('setup'); 
-            const [topic, setTopic] = useState('');
-            const [difficulty, setDifficulty] = useState('Medium');
-            const [quizData, setQuizData] = useState([]);
-            const [currentQ, setCurrentQ] = useState(0);
-            const [score, setScore] = useState(0);
-            const [answers, setAnswers] = useState({});
-            const [loading, setLoading] = useState(false);
-            const [error, setError] = useState('');
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              <button className="py-3 rounded-xl bg-green-600 text-white font-semibold shadow hover:bg-green-700 transition transform hover:scale-105">Topic Mode</button>
+              <button className="py-3 rounded-xl bg-gray-200 text-gray-700 font-semibold shadow hover:bg-gray-300 transition transform hover:scale-105">Document Mode</button>
+            </div>
 
-            const generateQuiz = async () => {
-                if (!topic) return setError("Please enter a topic!");
-                setLoading(true);
-                setError('');
+            <input type="text" placeholder="Enter a topic..." className="w-full p-4 rounded-xl border border-gray-300 focus:ring-2 focus:ring-green-400 outline-none mb-6" />
 
-                try {
-                    // Calling our own Vercel Backend
-                    const response = await fetch('/api/generate-quiz', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ topic, difficulty })
-                    });
+            <button className="w-full py-4 bg-green-600 text-white rounded-xl font-bold text-lg shadow-lg hover:bg-green-700 transition transform hover:scale-105 active:scale-95">
+              Generate Quiz
+            </button>
+          </div>
+        </div>
+      );
+    };
 
-                    const data = await response.json();
-                    if (data.error) throw new Error(data.error);
-                    
-                    setQuizData(data);
-                    setView('quiz');
-                    setCurrentQ(0);
-                    setScore(0);
-                    setAnswers({});
-                } catch (err) {
-                    setError("Error: " + err.message);
-                } finally {
-                    setLoading(false);
-                }
-            };
-
-            const handleAnswer = (option) => {
-                const isCorrect = option === quizData[currentQ].correctAnswer;
-                setAnswers({ ...answers, [currentQ]: option });
-                if (isCorrect) setScore(s => s + 1);
-            };
-
-            // Setup View
-            if (view === 'setup') return (
-                <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-green-50 to-emerald-100">
-                    <div className="max-w-md w-full bg-white rounded-2xl shadow-xl overflow-hidden slide-up border border-green-100">
-                        <div className="bg-green-600 p-8 text-center relative overflow-hidden">
-                            <div className="absolute top-0 left-0 w-full h-full pattern-dots"></div>
-                            <Brain className="w-16 h-16 text-white mx-auto mb-3 relative z-10" />
-                            <h1 className="text-3xl font-bold text-white relative z-10">GenQuiz AI</h1>
-                            <p className="text-green-100 relative z-10">Powered by Gemini 2.5 Pro</p>
-                        </div>
-                        <div className="p-8 space-y-6">
-                            <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-2">What do you want to learn?</label>
-                                <input type="text" value={topic} onChange={e => setTopic(e.target.value)}
-                                    className="w-full p-4 border-2 border-gray-200 rounded-xl focus:border-green-500 focus:ring-0 outline-none transition text-lg placeholder-gray-400"
-                                    placeholder="e.g. Solar System, React JS..." />
-                            </div>
-                            
-                            <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-2">Difficulty Level</label>
-                                <div className="grid grid-cols-3 gap-2">
-                                    {['Easy', 'Medium', 'Hard'].map(lvl => (
-                                        <button key={lvl} onClick={() => setDifficulty(lvl)}
-                                            className={`p-3 rounded-xl text-sm font-bold transition ${difficulty === lvl ? 'bg-green-600 text-white shadow-md transform scale-105' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-                                            {lvl}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {error && <div className="text-red-500 text-sm bg-red-50 p-4 rounded-xl flex items-center gap-2 border border-red-100">⚠️ {error}</div>}
-
-                            <button onClick={generateQuiz} disabled={loading}
-                                className="w-full bg-black text-white py-4 rounded-xl font-bold hover:bg-gray-900 transition flex justify-center items-center gap-2 text-lg shadow-lg hover:shadow-xl active:scale-95 transform duration-200">
-                                {loading ? <Loader2 className="animate-spin" /> : <><Sparkles size={20} /> Create Quiz</>}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            );
-
-            // Quiz View
-            if (view === 'quiz') {
-                const q = quizData[currentQ];
-                const answered = answers[currentQ];
-                return (
-                    <div className="min-h-screen bg-green-50 flex items-center justify-center p-4">
-                        <div className="max-w-2xl w-full bg-white rounded-2xl shadow-lg overflow-hidden slide-up">
-                            <div className="p-6 border-b flex justify-between items-center bg-white sticky top-0 z-10 backdrop-blur-md bg-white/90">
-                                <span className="text-gray-400 font-bold text-xs tracking-widest uppercase">Question {currentQ + 1} of {quizData.length}</span>
-                                <button onClick={() => setView('setup')} className="text-red-500 text-xs font-bold hover:text-red-600 uppercase tracking-wider transition">Quit Quiz</button>
-                            </div>
-                            <div className="p-8">
-                                <h2 className="text-2xl font-bold text-gray-800 mb-8 leading-snug">{q.question}</h2>
-                                <div className="space-y-3">
-                                    {q.options.map((opt, idx) => {
-                                        let style = "w-full text-left p-5 rounded-xl border-2 transition font-medium text-lg flex items-center justify-between group ";
-                                        if (answered) {
-                                            if (opt === q.correctAnswer) style += "border-green-500 bg-green-50 text-green-800";
-                                            else if (opt === answered) style += "border-red-500 bg-red-50 text-red-800";
-                                            else style += "border-gray-100 text-gray-400 opacity-60";
-                                        } else style += "border-gray-100 hover:border-green-500 hover:bg-green-50 text-gray-700 hover:shadow-md";
-                                        return (
-                                            <button key={idx} onClick={() => !answered && handleAnswer(opt)} disabled={!!answered} className={style}>
-                                                <span>{opt}</span>
-                                                {!answered && <div className="w-4 h-4 rounded-full border-2 border-gray-300 group-hover:border-green-500"></div>}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                                {answered && <div className="mt-6 p-5 bg-blue-50 text-blue-900 rounded-xl border border-blue-100 animate-in fade-in slide-in-from-bottom-2"><strong>💡 Insight:</strong> {q.explanation}</div>}
-                            </div>
-                            <div className="p-6 bg-gray-50 border-t flex justify-end">
-                                {answered && (currentQ < quizData.length - 1 ? 
-                                    <button onClick={() => setCurrentQ(c => c + 1)} className="px-8 py-3 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 flex items-center gap-2 shadow-lg hover:shadow-green-200 transition">Next <ArrowRight size={20} /></button> :
-                                    <button onClick={() => setView('result')} className="px-8 py-3 bg-black text-white rounded-xl font-bold hover:bg-gray-800 flex items-center gap-2 shadow-lg transition">See Results <Trophy size={20} /></button>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                );
-            }
-
-            // Result View
-            return (
-                <div className="min-h-screen bg-green-900 flex items-center justify-center p-4 relative overflow-hidden">
-                    <div className="absolute inset-0 pattern-dots opacity-10"></div>
-                    <div className="max-w-md w-full bg-white rounded-3xl shadow-2xl p-8 text-center slide-up relative z-10">
-                        <div className="w-24 h-24 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
-                            <Trophy className="w-12 h-12 text-yellow-500 drop-shadow-md" />
-                        </div>
-                        <h2 className="text-5xl font-black text-gray-800 mb-2 tracking-tighter">{Math.round((score/quizData.length)*100)}%</h2>
-                        <p className="text-gray-500 mb-8 font-medium text-lg">You scored {score} out of {quizData.length}</p>
-                        
-                        <div className="grid grid-cols-2 gap-4 mb-8">
-                            <div className="bg-green-50 p-4 rounded-2xl">
-                                <span className="block text-2xl font-bold text-green-600">{score}</span>
-                                <span className="text-xs text-green-800 font-bold uppercase">Correct</span>
-                            </div>
-                            <div className="bg-red-50 p-4 rounded-2xl">
-                                <span className="block text-2xl font-bold text-red-600">{quizData.length - score}</span>
-                                <span className="text-xs text-red-800 font-bold uppercase">Incorrect</span>
-                            </div>
-                        </div>
-
-                        <button onClick={() => setView('setup')} className="w-full bg-green-600 text-white py-4 rounded-xl font-bold hover:bg-green-700 transition flex justify-center items-center gap-2 shadow-xl shadow-green-200 active:scale-95 transform duration-200"><RotateCcw size={20} /> Try Another Topic</button>
-                    </div>
-                </div>
-            );
-        };
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
 </body>
 </html>

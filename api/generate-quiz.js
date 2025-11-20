@@ -1,28 +1,14 @@
+const express = require('express');
+const cors = require('cors');
 const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 
-// Vercel Serverless Function Handler
-module.exports = async (req, res) => {
-    // 1. Enable CORS (Taaki frontend baat kar sake)
-    res.setHeader('Access-Control-Allow-Credentials', true);
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-    res.setHeader(
-        'Access-Control-Allow-Headers',
-        'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
-    );
+const app = express();
+app.use(cors());
+app.use(express.json());
 
-    // 2. Preflight Check (Browser styling request)
-    if (req.method === 'OPTIONS') {
-        res.status(200).end();
-        return;
-    }
-
-    // 3. Only allow POST requests
-    if (req.method !== 'POST') {
-        return res.status(405).json({ error: 'Method Not Allowed' });
-    }
-
+app.post('/api/generate-quiz', async (req, res) => {
     const apiKey = process.env.GEMINI_API_KEY;
+    
     if (!apiKey) {
         return res.status(500).json({ error: "Server configuration error: API Key missing" });
     }
@@ -46,6 +32,7 @@ module.exports = async (req, res) => {
     ]`;
 
     try {
+        // UPDATED: Using Gemini 2.5 Pro
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${apiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -60,20 +47,26 @@ module.exports = async (req, res) => {
         const data = await response.json();
         
         if (data.error) {
+            console.error("Gemini API Error:", data.error);
             throw new Error(data.error.message || "API Error");
         }
 
         let text = data.candidates[0].content.parts[0].text;
+        // Cleaning up any potential markdown formatting
         text = text.replace(/```json/g, '').replace(/```/g, '').trim();
         
         try {
             const json = JSON.parse(text);
-            res.status(200).json(json);
+            res.json(json);
         } catch (e) {
-            throw new Error("AI generated invalid JSON format.");
+            console.error("JSON Parse Error. AI Output was:", text);
+            throw new Error("AI generated invalid JSON format. Please try again.");
         }
 
     } catch (error) {
+        console.error(error);
         res.status(500).json({ error: "Failed to generate quiz. " + error.message });
     }
-};
+});
+
+module.exports = app;
