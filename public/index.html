@@ -41,6 +41,30 @@
             transition: transform 0.1s ease-out;
             transform-style: preserve-3d;
         }
+        
+        /* Slider Styling */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #10b981;
+            cursor: pointer;
+            margin-top: -8px;
+            box-shadow: 0 2px 6px rgba(16,185,129,0.4);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #e5e7eb;
+            border-radius: 2px;
+        }
     </style>
 </head>
 <body>
@@ -62,6 +86,7 @@
             const [mode, setMode] = useState('topic');
             const [topic, setTopic] = useState('');
             const [difficulty, setDifficulty] = useState('Medium');
+            const [numQuestions, setNumQuestions] = useState(5); // Default 5 questions
             const [fileName, setFileName] = useState('');
             const [sourceText, setSourceText] = useState('');
             
@@ -179,11 +204,30 @@
                                         )}
                                     </div>
                                     
+                                    {/* Question Count Slider */}
+                                    <div className="mt-6 fade-in">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <label className="text-xs text-gray-500 font-bold uppercase tracking-wider">Questions: <span className="text-emerald-600 text-sm">{numQuestions}</span></label>
+                                        </div>
+                                        <input 
+                                            type="range" 
+                                            min="3" 
+                                            max="15" 
+                                            value={numQuestions} 
+                                            onChange={(e) => setNumQuestions(parseInt(e.target.value))}
+                                            className="w-full accent-emerald-500"
+                                        />
+                                        <div className="flex justify-between text-[10px] text-gray-400 mt-1">
+                                            <span>3</span>
+                                            <span>15</span>
+                                        </div>
+                                    </div>
+
                                     {error && <div className="mt-4 text-xs text-red-500 bg-red-50 p-2 rounded-lg text-center">{error}</div>}
 
                                     <button 
                                         className="mt-6 w-full py-4 bg-emerald-600 text-white font-bold rounded-xl shadow-lg hover:bg-emerald-700 flex justify-center items-center gap-2 transition transform active:scale-95 disabled:opacity-70"
-                                        onClick={() => onGenerate({ mode, topic, sourceText, difficulty })}
+                                        onClick={() => onGenerate({ mode, topic, sourceText, difficulty, numQuestions })}
                                         disabled={loading}
                                     >
                                         {loading ? <Icons.Loader /> : "Generate Quiz"}
@@ -201,7 +245,7 @@
                                             <div className="p-2 bg-white rounded-lg border text-gray-400">C. Option 3</div>
                                         </div>
                                     </div>
-                                    <p className="text-xs text-gray-400 mt-4 text-center">AI will generate questions instantly.</p>
+                                    <p className="text-xs text-gray-400 mt-4 text-center">AI will generate {numQuestions} questions instantly.</p>
                                 </div>
                             </div>
                         </div>
@@ -224,7 +268,7 @@
                         </div>
                         <div className="p-8">
                             <div className="flex justify-between items-center mb-6">
-                                <span className="text-xs font-bold text-emerald-600 bg-emerald-100 px-3 py-1 rounded-full uppercase tracking-wider">Question {currentQ + 1}</span>
+                                <span className="text-xs font-bold text-emerald-600 bg-emerald-100 px-3 py-1 rounded-full uppercase tracking-wider">Question {currentQ + 1} of {quizData.length}</span>
                                 <button onClick={onQuit} className="text-gray-400 hover:text-red-500 font-bold text-xs uppercase">Quit</button>
                             </div>
                             <h2 className="text-2xl font-bold text-gray-800 mb-8 leading-snug">{q.question}</h2>
@@ -290,7 +334,7 @@
             const [loading, setLoading] = useState(false);
             const [error, setError] = useState('');
 
-            const generateQuiz = async ({ mode, topic, sourceText, difficulty }) => {
+            const generateQuiz = async ({ mode, topic, sourceText, difficulty, numQuestions }) => {
                 if (mode === 'topic' && !topic) return setError("Please enter a topic");
                 if (mode === 'file' && !sourceText) return setError("Please upload a file");
                 
@@ -304,7 +348,8 @@
                         body: JSON.stringify({ 
                             topic: mode === 'topic' ? topic : "File Content",
                             sourceText: mode === 'file' ? sourceText : null,
-                            difficulty 
+                            difficulty,
+                            numQuestions
                         })
                     });
                     const data = await response.json();
@@ -356,13 +401,3 @@
     </script>
 </body>
 </html>
-```
-
-### 🚀 Deploy Kaise Karein:
-
-1.  Is code ko **`public/index.html`** mein paste karo aur save karo.
-2.  Terminal mein wahi commands chalao:
-    ```bash
-    git add .
-    git commit -m "Fix blank screen crash"
-    git push
