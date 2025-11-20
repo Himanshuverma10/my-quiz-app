@@ -1,55 +1,372 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GenQuiz AI - Redesigned</title>
-  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
-    body { font-family: 'Poppins', sans-serif; }
-  </style>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GenQuiz AI - Redesigned</title>
+    
+    <!-- Libraries -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- PDF.js for reading files -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap');
+        body { font-family: 'Poppins', sans-serif; }
+        
+        /* Custom Animations */
+        .animate-fadeIn { animation: fadeIn 0.8s ease-out forwards; }
+        .animate-slideUp { animation: slideUp 0.6s ease-out forwards; }
+        .animate-bounceSlow { animation: bounceSlow 3s infinite; }
+        
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes bounceSlow { 
+            0%, 100% { transform: translateY(-5%); } 
+            50% { transform: translateY(5%); } 
+        }
+        
+        /* Glassmorphism utilities */
+        .glass { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(10px); }
+    </style>
 </head>
-<body class="bg-gradient-to-br from-green-50 via-white to-green-100">
-  <div id="root"></div>
+<body class="bg-gradient-to-br from-green-50 via-white to-green-100 min-h-screen text-slate-800">
+    <div id="root"></div>
 
-  <script type="text/babel">
-    const App = () => {
-      return (
-        <div className="min-h-screen flex flex-col items-center justify-center p-6">
-          {/* Logo Section */}
-          <div className="text-center mb-8 animate-fadeIn">
-            <div className="w-20 h-20 rounded-2xl bg-green-600 flex items-center justify-center shadow-xl mb-4 animate-bounceSlow">
-              <span className="text-white text-4xl font-bold">GQ</span>
-            </div>
-            <h1 className="text-4xl font-extrabold text-green-700 tracking-wide drop-shadow-md">GenQuiz AI</h1>
-            <p className="text-gray-600 mt-2">Smart • Fast • Interactive</p>
-          </div>
+    <script type="text/babel">
+        const { useState, useRef } = React;
 
-          {/* Card */}
-          <div className="bg-white shadow-2xl rounded-3xl p-10 w-full max-w-xl backdrop-blur-xl border border-green-100 animate-slideUp">
-            <h2 className="text-xl font-semibold text-gray-700 mb-4">Start Creating Your Quiz</h2>
+        // --- Icons (Inline SVGs to prevent loading errors) ---
+        const Icons = {
+            Brain: ({className}) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"/></svg>,
+            Upload: ({className}) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>,
+            FileCheck: ({className}) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="m9 15 2 2 4-4"/></svg>,
+            Loader: ({className}) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>,
+            Trophy: ({className}) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>,
+            ArrowRight: ({className}) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+        };
 
-            <div className="grid grid-cols-2 gap-4 mb-6">
-              <button className="py-3 rounded-xl bg-green-600 text-white font-semibold shadow hover:bg-green-700 transition transform hover:scale-105">Topic Mode</button>
-              <button className="py-3 rounded-xl bg-gray-200 text-gray-700 font-semibold shadow hover:bg-gray-300 transition transform hover:scale-105">Document Mode</button>
-            </div>
+        const App = () => {
+            // --- STATE MANAGEMENT ---
+            const [view, setView] = useState('setup'); // setup, quiz, result
+            const [mode, setMode] = useState('topic'); // topic, file
+            const [topic, setTopic] = useState('');
+            const [sourceText, setSourceText] = useState('');
+            const [fileName, setFileName] = useState('');
+            const [difficulty, setDifficulty] = useState('Medium');
+            const [quizData, setQuizData] = useState([]);
+            const [currentQ, setCurrentQ] = useState(0);
+            const [score, setScore] = useState(0);
+            const [answers, setAnswers] = useState({});
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState('');
+            const fileInputRef = useRef(null);
 
-            <input type="text" placeholder="Enter a topic..." className="w-full p-4 rounded-xl border border-gray-300 focus:ring-2 focus:ring-green-400 outline-none mb-6" />
+            // --- LOGIC HANDLERS ---
+            const handleFileChange = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                setLoading(true);
+                setError('');
+                setFileName(file.name);
 
-            <button className="w-full py-4 bg-green-600 text-white rounded-xl font-bold text-lg shadow-lg hover:bg-green-700 transition transform hover:scale-105 active:scale-95">
-              Generate Quiz
-            </button>
-          </div>
-        </div>
-      );
-    };
+                try {
+                    if (file.type === 'application/pdf') {
+                        const text = await extractTextFromPDF(file);
+                        setSourceText(text);
+                    } else if (file.type === 'text/plain') {
+                        const text = await file.text();
+                        setSourceText(text);
+                    } else {
+                        setError("Only .pdf and .txt supported");
+                        setFileName('');
+                    }
+                } catch (err) {
+                    setError("File error: " + err.message);
+                } finally {
+                    setLoading(false);
+                }
+            };
 
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<App />);
-  </script>
+            const extractTextFromPDF = async (file) => {
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                let fullText = "";
+                const maxPages = Math.min(pdf.numPages, 15); 
+                for (let i = 1; i <= maxPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const textContent = await page.getTextContent();
+                    fullText += textContent.items.map(item => item.str).join(' ') + "\n";
+                }
+                return fullText;
+            };
+
+            const generateQuiz = async () => {
+                if (mode === 'topic' && !topic) return setError("Please enter a topic first");
+                if (mode === 'file' && !sourceText) return setError("Please upload a file first");
+
+                setLoading(true);
+                setError('');
+
+                try {
+                    const response = await fetch('/api/generate-quiz', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            topic: mode === 'topic' ? topic : "File Content",
+                            sourceText: mode === 'file' ? sourceText : null,
+                            difficulty 
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    if (data.error) throw new Error(data.error);
+                    
+                    setQuizData(data);
+                    setView('quiz');
+                    setCurrentQ(0);
+                    setScore(0);
+                    setAnswers({});
+                } catch (err) {
+                    setError("Error: " + err.message);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            // --- VIEWS ---
+
+            const SetupView = () => (
+                <div className="min-h-screen flex flex-col items-center justify-center p-6">
+                    {/* Logo Section */}
+                    <div className="text-center mb-8 animate-fadeIn">
+                        <div className="w-20 h-20 rounded-3xl bg-green-600 flex items-center justify-center shadow-2xl shadow-green-200 mb-4 mx-auto animate-bounceSlow">
+                            <span className="text-white text-3xl font-bold tracking-tighter">GQ</span>
+                        </div>
+                        <h1 className="text-5xl font-extrabold text-green-800 tracking-tight drop-shadow-sm mb-2">GenQuiz AI</h1>
+                        <p className="text-gray-500 font-medium">Smart • Fast • Interactive</p>
+                    </div>
+
+                    {/* Main Card */}
+                    <div className="bg-white shadow-2xl rounded-[2rem] p-8 w-full max-w-xl border border-green-100 animate-slideUp relative overflow-hidden">
+                        
+                        {/* Decorative gradient blob */}
+                        <div className="absolute -top-20 -right-20 w-40 h-40 bg-green-100 rounded-full blur-3xl opacity-50 pointer-events-none"></div>
+
+                        <h2 className="text-xl font-bold text-gray-700 mb-6 relative z-10">Start Creating Your Quiz</h2>
+
+                        {/* Mode Toggles */}
+                        <div className="grid grid-cols-2 gap-3 mb-8 p-1.5 bg-gray-100 rounded-2xl relative z-10">
+                            <button 
+                                onClick={() => setMode('topic')}
+                                className={`py-3 rounded-xl font-semibold transition-all duration-300 ${mode === 'topic' ? 'bg-white text-green-700 shadow-md scale-100' : 'text-gray-500 hover:bg-gray-200'}`}
+                            >
+                                Topic Mode
+                            </button>
+                            <button 
+                                onClick={() => setMode('file')}
+                                className={`py-3 rounded-xl font-semibold transition-all duration-300 ${mode === 'file' ? 'bg-white text-green-700 shadow-md scale-100' : 'text-gray-500 hover:bg-gray-200'}`}
+                            >
+                                Document Mode
+                            </button>
+                        </div>
+
+                        {/* Input Section */}
+                        <div className="mb-8 min-h-[100px] relative z-10">
+                            {mode === 'topic' ? (
+                                <div className="animate-fadeIn">
+                                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">What do you want to learn?</label>
+                                    <input 
+                                        type="text" 
+                                        value={topic}
+                                        onChange={(e) => setTopic(e.target.value)}
+                                        placeholder="e.g. Quantum Physics, History of Rome..." 
+                                        className="w-full p-5 rounded-2xl bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-green-500 focus:bg-white outline-none transition font-medium text-gray-800" 
+                                    />
+                                </div>
+                            ) : (
+                                <div className="animate-fadeIn">
+                                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Upload Study Material</label>
+                                    <div 
+                                        onClick={() => fileInputRef.current.click()}
+                                        className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition group ${fileName ? 'border-green-500 bg-green-50' : 'border-gray-300 hover:border-green-400 hover:bg-gray-50'}`}
+                                    >
+                                        <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept=".txt,.pdf" />
+                                        {fileName ? (
+                                            <div className="flex flex-col items-center text-green-700">
+                                                <Icons.FileCheck className="w-8 h-8 mb-2" />
+                                                <span className="font-bold text-sm break-all">{fileName}</span>
+                                                <span className="text-xs mt-1">Tap to replace</span>
+                                            </div>
+                                        ) : (
+                                            <div className="flex flex-col items-center text-gray-400 group-hover:text-green-600">
+                                                <Icons.Upload className="w-8 h-8 mb-2" />
+                                                <span className="font-bold text-sm">Upload PDF or TXT</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Difficulty Selector */}
+                        <div className="mb-8 relative z-10">
+                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Difficulty</label>
+                            <div className="flex gap-2">
+                                {['Easy', 'Medium', 'Hard'].map(lvl => (
+                                    <button 
+                                        key={lvl} 
+                                        onClick={() => setDifficulty(lvl)}
+                                        className={`flex-1 py-2.5 rounded-xl text-sm font-bold border-2 transition ${difficulty === lvl ? 'border-green-600 bg-green-50 text-green-700' : 'border-transparent bg-gray-50 text-gray-400 hover:bg-gray-100'}`}
+                                    >
+                                        {lvl}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {error && (
+                            <div className="mb-6 p-4 bg-red-50 text-red-500 rounded-xl text-sm font-medium border border-red-100 flex items-center animate-fadeIn">
+                                ⚠️ {error}
+                            </div>
+                        )}
+
+                        <button 
+                            onClick={generateQuiz}
+                            disabled={loading}
+                            className="w-full py-4 bg-green-600 text-white rounded-xl font-bold text-lg shadow-xl shadow-green-200 hover:bg-green-700 transition transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70 disabled:scale-100 flex items-center justify-center gap-2 relative z-10"
+                        >
+                            {loading ? <Icons.Loader className="animate-spin" /> : "Generate Quiz"}
+                        </button>
+                    </div>
+                </div>
+            );
+
+            // Kept your layout logic but updated colors/styles to match new theme
+            const QuizView = () => {
+                const q = quizData[currentQ];
+                const isAnswered = answers[currentQ];
+
+                return (
+                    <div className="min-h-screen flex items-center justify-center p-6">
+                        <div className="w-full max-w-2xl bg-white shadow-2xl rounded-[2rem] overflow-hidden animate-slideUp border border-green-100">
+                            {/* Progress Bar */}
+                            <div className="h-2 bg-gray-100 w-full">
+                                <div className="h-full bg-green-500 transition-all duration-500" style={{width: `${((currentQ+1)/quizData.length)*100}%`}}></div>
+                            </div>
+
+                            <div className="p-8">
+                                <div className="flex justify-between items-center mb-6">
+                                    <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold uppercase tracking-wider">
+                                        Question {currentQ + 1}/{quizData.length}
+                                    </span>
+                                    <button onClick={() => setView('setup')} className="text-gray-400 hover:text-red-500 font-semibold text-sm transition">Quit</button>
+                                </div>
+
+                                <h2 className="text-2xl font-bold text-gray-800 mb-8 leading-snug">{q.question}</h2>
+
+                                <div className="space-y-3">
+                                    {q.options.map((opt, i) => {
+                                        const userAns = answers[currentQ];
+                                        let style = "w-full p-5 rounded-2xl text-left font-medium border-2 transition-all duration-200 ";
+                                        
+                                        if (userAns) {
+                                            if (opt === q.correctAnswer) style += "border-green-500 bg-green-50 text-green-800";
+                                            else if (opt === userAns) style += "border-red-400 bg-red-50 text-red-800";
+                                            else style += "border-gray-100 text-gray-400 opacity-50";
+                                        } else {
+                                            style += "border-gray-100 hover:border-green-400 hover:bg-green-50 text-gray-600 hover:shadow-md";
+                                        }
+
+                                        return (
+                                            <button 
+                                                key={i} 
+                                                disabled={!!userAns} 
+                                                onClick={() => {
+                                                    setAnswers({...answers, [currentQ]: opt});
+                                                    if(opt === q.correctAnswer) setScore(s => s + 1);
+                                                }} 
+                                                className={style}
+                                            >
+                                                {opt}
+                                            </button>
+                                        )
+                                    })}
+                                </div>
+
+                                {isAnswered && (
+                                    <div className="mt-6 p-5 bg-blue-50 text-blue-900 rounded-2xl border border-blue-100 animate-fadeIn">
+                                        <strong className="block text-blue-700 text-xs uppercase tracking-wider mb-1">Explanation</strong>
+                                        {q.explanation}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="p-6 bg-gray-50 border-t border-gray-100 flex justify-end">
+                                {isAnswered && (
+                                    currentQ < quizData.length - 1 
+                                    ? <button onClick={() => setCurrentQ(c => c + 1)} className="px-8 py-3 bg-green-600 text-white rounded-xl font-bold shadow-lg hover:bg-green-700 transition flex items-center gap-2">Next <Icons.ArrowRight size={20}/></button>
+                                    : <button onClick={() => setView('result')} className="px-8 py-3 bg-black text-white rounded-xl font-bold shadow-lg hover:bg-gray-800 transition">Finish Quiz</button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
+            const ResultView = () => (
+                <div className="min-h-screen flex items-center justify-center p-6">
+                    <div className="max-w-lg w-full bg-white shadow-2xl rounded-[2rem] p-10 text-center animate-slideUp border border-green-100 relative overflow-hidden">
+                        <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-green-400 to-green-600"></div>
+                        
+                        <div className="w-24 h-24 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
+                            <Icons.Trophy className="w-12 h-12 text-yellow-500" />
+                        </div>
+
+                        <h2 className="text-6xl font-extrabold text-green-600 mb-2 tracking-tighter">
+                            {Math.round((score / quizData.length) * 100)}%
+                        </h2>
+                        <p className="text-gray-400 font-medium mb-8 text-lg">Score: {score} / {quizData.length}</p>
+
+                        <div className="grid grid-cols-2 gap-4 mb-8">
+                            <div className="p-4 rounded-2xl bg-green-50 border border-green-100">
+                                <span className="block text-3xl font-bold text-green-600">{score}</span>
+                                <span className="text-xs font-bold text-green-400 uppercase">Correct</span>
+                            </div>
+                            <div className="p-4 rounded-2xl bg-red-50 border border-red-100">
+                                <span className="block text-3xl font-bold text-red-500">{quizData.length - score}</span>
+                                <span className="text-xs font-bold text-red-400 uppercase">Incorrect</span>
+                            </div>
+                        </div>
+
+                        <button 
+                            onClick={() => setView('setup')} 
+                            className="w-full py-4 bg-gray-900 text-white rounded-xl font-bold text-lg shadow-xl hover:bg-black transition transform hover:scale-[1.02]"
+                        >
+                            Create New Quiz
+                        </button>
+                    </div>
+                </div>
+            );
+
+            return (
+                <>
+                    {view === 'setup' && <SetupView />}
+                    {view === 'quiz' && <QuizView />}
+                    {view === 'result' && <ResultView />}
+                </>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
 </body>
 </html>
