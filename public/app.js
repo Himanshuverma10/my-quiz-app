@@ -4,14 +4,16 @@ const { useState, useRef, useEffect } = React;
 const auth = window.auth;
 const db = window.db;
 
-// Helper: Check if option is correct
-const isOptionCorrect = (option, correctKey) => {
-    if (!option || !correctKey) return false;
-    const cleanOpt = option.trim();
-    const cleanKey = correctKey.trim();
-    if (cleanOpt === cleanKey) return true;
-    if (cleanOpt.startsWith(cleanKey + ")") || cleanOpt.startsWith(cleanKey + ".")) return true;
-    return false;
+// --- HELPERS ---
+
+// 1. Get Letter Label based on Index (0->A, 1->B, etc.)
+const getLabel = (index) => String.fromCharCode(65 + index); // 65 is ASCII for 'A'
+
+// 2. Clean Option Text (Removes "A)", "1.", "a." from the start if AI adds them)
+const cleanOptionText = (text) => {
+    if(!text) return "";
+    // Regex to remove "A)", "A.", "1)", "1." at the start
+    return text.replace(/^[A-Da-d0-9]+[\)\.]\s*/, "").trim();
 };
 
 // --- Icons ---
@@ -35,7 +37,7 @@ const Icons = {
     Zap: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
 };
 
-// --- 🔥 UPDATED ADD SUBJECT MODAL (With File Upload) ---
+// --- ADD SUBJECT MODAL ---
 const AddSubjectModal = ({ onClose, onSave }) => {
     const [name, setName] = useState('');
     const [syllabus, setSyllabus] = useState('');
@@ -43,13 +45,11 @@ const AddSubjectModal = ({ onClose, onSave }) => {
     const [fileName, setFileName] = useState('');
     const fileRef = useRef(null);
 
-    // 📄 New Function: Handle File Upload inside Modal
     const handleFile = async (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
         setFileName(file.name);
-        setParsing(true); // Use parsing state to show "reading file..."
-
+        setParsing(true);
         try {
             let text = "";
             if (file.type === 'application/pdf') {
@@ -64,17 +64,12 @@ const AddSubjectModal = ({ onClose, onSave }) => {
             } else {
                 text = await file.text();
             }
-            // Auto-fill the textarea with extracted text
             setSyllabus(text); 
-        } catch (err) {
-            alert("Error reading file: " + err.message);
-        } finally {
-            setParsing(false);
-        }
+        } catch (err) { alert("Error reading file: " + err.message); } finally { setParsing(false); }
     };
 
     const handleSubmit = async () => {
-        if (!name || !syllabus) return alert("Please provide a subject name and syllabus (text or file).");
+        if (!name || !syllabus) return alert("Please provide a subject name and syllabus.");
         setParsing(true);
         try {
             const response = await fetch('/api/parse-syllabus', {
@@ -85,32 +80,23 @@ const AddSubjectModal = ({ onClose, onSave }) => {
             const data = await response.json();
             if(data.error) throw new Error(data.error);
             onSave(name, data.topics);
-        } catch (err) {
-            alert("Error parsing syllabus: " + err.message);
-            setParsing(false);
-        }
+        } catch (err) { alert("Error parsing syllabus: " + err.message); setParsing(false); }
     };
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm fade-in p-4">
             <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 max-w-lg w-full shadow-2xl border border-slate-200 dark:border-slate-700">
                 <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">Add New Subject</h2>
-                
                 <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Subject Name</label>
                 <input value={name} onChange={e => setName(e.target.value)} className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 mb-4 focus:outline-none focus:border-indigo-500" placeholder="e.g. Physics" />
-
                 <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Syllabus Source</label>
-                
-                {/* File Upload Area */}
                 <div onClick={() => fileRef.current.click()} className="w-full p-4 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition mb-4">
                     <div className="text-slate-400 dark:text-slate-500 mb-2"><Icons.Upload /></div>
                     <p className="text-sm font-medium text-slate-600 dark:text-slate-300">{fileName || "Click to Upload Syllabus (PDF/TXT)"}</p>
                     <input type="file" ref={fileRef} className="hidden" accept=".pdf,.txt" onChange={handleFile} />
                 </div>
-
-                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Or Paste Text (Editable)</label>
-                <textarea value={syllabus} onChange={e => setSyllabus(e.target.value)} className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 mb-6 h-24 focus:outline-none focus:border-indigo-500" placeholder="Unit 1: Motion, Unit 2: Force..." />
-
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Or Paste Text</label>
+                <textarea value={syllabus} onChange={e => setSyllabus(e.target.value)} className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 mb-6 h-24 focus:outline-none focus:border-indigo-500" placeholder="Unit 1: Motion..." />
                 <div className="flex gap-3">
                     <button onClick={onClose} className="flex-1 py-3 rounded-xl border border-slate-200 dark:border-slate-600 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700">Cancel</button>
                     <button onClick={handleSubmit} disabled={parsing} className="flex-1 py-3 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 flex justify-center items-center gap-2">
@@ -137,7 +123,7 @@ const LoginModal = ({ onLogin, onClose }) => (
     </div>
 );
 
-// --- TAB 1: QUICK GENERATOR (Open for All) ---
+// --- TAB 1: QUICK GENERATOR ---
 const QuickGenerator = ({ onGenerate, loading, error, progressText }) => {
     const [mode, setMode] = useState('topic');
     const [topic, setTopic] = useState('');
@@ -161,7 +147,6 @@ const QuickGenerator = ({ onGenerate, loading, error, progressText }) => {
                 <div className="grid grid-cols-1 md:grid-cols-2">
                     <div className="p-8 md:p-10 space-y-8">
                         <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2"><Icons.Zap /> Quick Quiz</h2>
-                        
                         <div>
                             <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 block">Select Mode</label>
                             <div className="flex gap-4">
@@ -169,7 +154,6 @@ const QuickGenerator = ({ onGenerate, loading, error, progressText }) => {
                                 <button onClick={() => setMode('file')} className={`flex-1 py-3 rounded-xl font-semibold text-sm border-2 transition-all ${mode === 'file' ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:border-[#10b981] dark:bg-[#10b981]/10 dark:text-[#10b981]' : 'border-slate-200 dark:border-slate-600 bg-transparent text-slate-500 dark:text-slate-400'}`}>File Upload</button>
                             </div>
                         </div>
-
                         <div>
                             <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 block">{mode === 'topic' ? 'Enter Topic' : 'Upload Document'}</label>
                             {mode === 'topic' ? (
@@ -182,7 +166,6 @@ const QuickGenerator = ({ onGenerate, loading, error, progressText }) => {
                                 </div>
                             )}
                         </div>
-
                          <div>
                             <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 block">Difficulty</label>
                             <div className="flex gap-2">
@@ -191,12 +174,10 @@ const QuickGenerator = ({ onGenerate, loading, error, progressText }) => {
                                 ))}
                             </div>
                         </div>
-
                         <div>
                              <div className="flex justify-between mb-2"><label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Questions: {numQuestions}</label></div>
                             <input type="range" min="3" max="15" value={numQuestions} onChange={(e) => setNumQuestions(parseInt(e.target.value))} />
                         </div>
-
                         <div>
                             <button onClick={() => onGenerate({ mode, topic, sourceText, difficulty, numQuestions })} disabled={loading} className="w-full py-4 rounded-xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-[#10b981] dark:hover:bg-[#059669] dark:text-slate-900 shadow-lg transition-all disabled:opacity-50 flex justify-center items-center gap-2">
                                 {loading ? <><Icons.Loader /> Generating...</> : "Generate Quiz"}
@@ -205,7 +186,6 @@ const QuickGenerator = ({ onGenerate, loading, error, progressText }) => {
                             {error && <p className="text-red-500 text-xs text-center font-medium mt-2">{error}</p>}
                         </div>
                     </div>
-
                     <div className="hidden md:flex bg-slate-50 dark:bg-slate-900/50 p-10 flex-col justify-center items-center relative overflow-hidden border-l border-slate-200 dark:border-slate-700">
                         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-[0.05] dark:opacity-[0.1]"></div>
                         <div className="relative z-10 text-center max-w-xs">
@@ -220,7 +200,7 @@ const QuickGenerator = ({ onGenerate, loading, error, progressText }) => {
     );
 };
 
-// --- TAB 2: SUBJECT DASHBOARD (Users Only) ---
+// --- TAB 2: SUBJECT DASHBOARD ---
 const SubjectDashboard = ({ user, subjects, onSelectSubject, onAddSubject, onOpenLogin }) => {
     if (!user) {
         return (
@@ -293,11 +273,12 @@ const SubjectDetail = ({ subject, topics, onBack, onStartTopic }) => (
     </div>
 );
 
-// --- REUSABLE QUIZ & RESULT VIEWS ---
+// --- 🔥 FIXED QUIZ VIEW (Separate Label from Text) ---
 const QuizView = ({ quizData, currentQ, answers, onAnswer, onNext, onQuit }) => {
     const q = quizData[currentQ];
     const answered = answers[currentQ];
     const progress = ((currentQ + 1) / quizData.length) * 100;
+
     return (
         <div className="w-full max-w-2xl mx-auto fade-in">
             <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-700">
@@ -305,19 +286,51 @@ const QuizView = ({ quizData, currentQ, answers, onAnswer, onNext, onQuit }) => 
                 <div className="p-8 md:p-10">
                     <div className="flex justify-between items-center mb-6"><span className="text-[10px] font-bold text-indigo-500 dark:text-[#10b981] bg-indigo-50 dark:bg-[#10b981]/10 px-3 py-1 rounded-full uppercase tracking-widest">Q{currentQ + 1} / {quizData.length}</span><button onClick={onQuit} className="text-slate-400 hover:text-red-500 text-xs font-bold uppercase tracking-widest">Quit</button></div>
                     <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-8 leading-snug">{q.question}</h2>
+                    
                     <div className="space-y-3">
-                        {q.options.map((opt, i) => {
-                            const isSel = answers[currentQ] === opt;
-                            const isRight = isOptionCorrect(opt, q.correctAnswer);
-                            let cls = "w-full p-5 rounded-xl text-left font-medium border-2 transition-all duration-200 text-sm ";
+                        {q.options.map((optText, i) => {
+                            // 1. Generate Label (A, B, C, D)
+                            const label = getLabel(i); 
+                            // 2. Clean Content (Remove "A)", "1." from text)
+                            const content = cleanOptionText(optText);
+                            
+                            // 3. Check status using LABEL
+                            const isSel = answers[currentQ] === label;
+                            const isRight = label === q.correctAnswer; // Compare "A" with "A"
+                            
+                            let containerStyle = "w-full flex items-stretch rounded-xl overflow-hidden border-2 transition-all duration-200 cursor-pointer ";
+                            let labelStyle = "w-12 flex items-center justify-center font-bold text-lg border-r-2 ";
+                            let textStyle = "flex-1 p-4 text-left font-medium text-sm flex items-center ";
+                            
                             if (answered) {
-                                if (isRight) cls += "border-green-500 bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400";
-                                else if (isSel) cls += "border-red-500 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400";
-                                else cls += "border-transparent bg-slate-100 dark:bg-slate-700 text-slate-400 opacity-50";
-                            } else cls += "border-transparent bg-slate-50 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:border-indigo-500 dark:hover:border-[#10b981] hover:bg-white dark:hover:bg-slate-600";
-                            return <button key={i} disabled={!!answered} onClick={() => onAnswer(opt)} className={cls}>{opt}</button>;
+                                if (isRight) {
+                                    containerStyle += "border-green-500 bg-green-50 dark:bg-green-900/20";
+                                    labelStyle += "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 border-green-500";
+                                    textStyle += "text-green-800 dark:text-green-300";
+                                } else if (isSel) {
+                                    containerStyle += "border-red-500 bg-red-50 dark:bg-red-900/20";
+                                    labelStyle += "bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400 border-red-500";
+                                    textStyle += "text-red-800 dark:text-red-300";
+                                } else {
+                                    containerStyle += "border-slate-200 dark:border-slate-700 opacity-50";
+                                    labelStyle += "bg-slate-100 dark:bg-slate-700 border-slate-200 dark:border-slate-700 text-slate-500";
+                                    textStyle += "text-slate-500 dark:text-slate-400";
+                                }
+                            } else {
+                                containerStyle += "border-slate-200 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-[#10b981] bg-white dark:bg-slate-800";
+                                labelStyle += "bg-slate-100 dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 group-hover:text-indigo-500";
+                                textStyle += "text-slate-700 dark:text-slate-300";
+                            }
+
+                            return (
+                                <div key={i} onClick={() => !answered && onAnswer(label)} className={containerStyle}>
+                                    <div className={labelStyle}>{label}</div>
+                                    <div className={textStyle}>{content}</div>
+                                </div>
+                            );
                         })}
                     </div>
+                    
                     {answered && <div className="mt-6 p-4 rounded-xl bg-indigo-50 dark:bg-slate-900 border border-indigo-100 dark:border-slate-600 text-slate-600 dark:text-slate-400 text-sm"><strong className="text-indigo-600 dark:text-[#10b981] block text-xs uppercase mb-1">Insight</strong>{q.explanation}</div>}
                 </div>
                 {answered && <div className="p-6 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-700 flex justify-end"><button onClick={onNext} className="px-8 py-3 bg-indigo-600 dark:bg-[#10b981] text-white dark:text-slate-900 rounded-xl font-bold shadow-lg flex items-center gap-2 hover:scale-105 transition transform">{currentQ < quizData.length - 1 ? "Next" : "Finish"} <Icons.ArrowRight /></button></div>}
@@ -326,6 +339,7 @@ const QuizView = ({ quizData, currentQ, answers, onAnswer, onNext, onQuit }) => 
     );
 };
 
+// --- 🔥 FIXED RESULT VIEW (Separate Label from Text) ---
 const ResultView = ({ score, total, user, quizData, userAnswers, onRetry, onOpenLogin }) => {
     const percentage = Math.round((score / total) * 100);
     return (
@@ -344,14 +358,37 @@ const ResultView = ({ score, total, user, quizData, userAnswers, onRetry, onOpen
             <div className="text-left space-y-6">
                 <h3 className="text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest text-xs text-center mb-6">Detailed Analysis</h3>
                 {quizData.map((q, index) => {
-                    const userAns = userAnswers[index];
-                    const isCorrect = isOptionCorrect(userAns, q.correctAnswer);
+                    // 1. User Answer is now a LETTER (e.g., "A")
+                    const userLabel = userAnswers[index]; 
+                    // 2. Correct Answer is a LETTER (e.g., "A")
+                    const correctLabel = q.correctAnswer;
+                    const isCorrect = userLabel === correctLabel;
+
                     return (
                         <div key={index} className="bg-white dark:bg-slate-800 rounded-2xl p-6 border border-slate-200 dark:border-slate-700 shadow-sm">
                             <div className="flex items-start gap-4">
-                                <div className={`mt-1 w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${isCorrect ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'}`}>{isCorrect ? <Icons.Check /> : <Icons.Cross />}</div>
+                                <div className={`mt-1 w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-bold text-sm ${isCorrect ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'}`}>
+                                    {isCorrect ? <Icons.Check /> : <Icons.Cross />}
+                                </div>
                                 <div className="w-full">
                                     <h4 className="text-lg font-bold text-slate-900 dark:text-white mb-3">{q.question}</h4>
+                                    
+                                    {/* Answer Comparison */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                        {/* User Selection */}
+                                        <div className={`p-3 rounded-lg text-sm border flex gap-3 items-center ${isCorrect ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-900 text-green-800 dark:text-green-400' : 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-900 text-red-800 dark:text-red-400'}`}>
+                                            <div className="font-bold px-2 py-1 rounded bg-white/50 dark:bg-black/20">{userLabel}</div>
+                                            <span className="font-medium opacity-90">Your Answer</span>
+                                        </div>
+                                        {/* Correct Answer (if wrong) */}
+                                        {!isCorrect && (
+                                             <div className="p-3 rounded-lg text-sm bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 flex gap-3 items-center">
+                                                <div className="font-bold px-2 py-1 rounded bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-400">{correctLabel}</div>
+                                                <span className="font-medium opacity-90">Correct Answer</span>
+                                            </div>
+                                        )}
+                                    </div>
+
                                     <div className="bg-indigo-50 dark:bg-slate-900/50 p-4 rounded-xl border border-indigo-100 dark:border-slate-700">
                                         <span className="text-[10px] font-bold text-indigo-600 dark:text-[#10b981] uppercase tracking-wider block mb-2">Theory</span>
                                         <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">{q.explanation}</p>
@@ -370,17 +407,15 @@ const ResultView = ({ score, total, user, quizData, userAnswers, onRetry, onOpen
 const App = () => {
     const [user, setUser] = useState(null);
     const [theme, setTheme] = useState('dark');
-    const [activeTab, setActiveTab] = useState('generator'); // 'generator', 'subjects'
-    const [view, setView] = useState('home'); // 'home', 'subject-detail', 'quiz', 'result'
+    const [activeTab, setActiveTab] = useState('generator'); 
+    const [view, setView] = useState('home');
     
-    // Data State
     const [subjects, setSubjects] = useState([]);
     const [activeSubject, setActiveSubject] = useState(null);
     const [activeTopics, setActiveTopics] = useState([]);
     const [showAddModal, setShowAddModal] = useState(false);
     const [showLoginModal, setShowLoginModal] = useState(false);
 
-    // Quiz State
     const [quizData, setQuizData] = useState([]);
     const [currentQ, setCurrentQ] = useState(0);
     const [score, setScore] = useState(0);
@@ -390,7 +425,6 @@ const App = () => {
     const [progressText, setProgressText] = useState('');
     const [currentTopicName, setCurrentTopicName] = useState('');
     
-    // Auth Listener
     useEffect(() => {
         if(!auth) return;
         auth.onAuthStateChanged((u) => {
@@ -403,7 +437,6 @@ const App = () => {
     const handleLogin = async () => { const provider = new firebase.auth.GoogleAuthProvider(); try { await auth.signInWithPopup(provider); } catch (e) { alert(e.message); } };
     const handleLogout = () => { auth.signOut(); setSubjects([]); setActiveTab('generator'); };
 
-    // Firestore Logic
     const fetchSubjects = async (uid) => {
         const snap = await db.collection('users').doc(uid).collection('subjects').get();
         setSubjects(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -438,7 +471,6 @@ const App = () => {
         }
     };
 
-    // Quiz Logic
     useEffect(() => { if (!loading) return; const texts = ["Scanning Knowledge Base...", "Formulating Questions...", "Finalizing Quiz..."]; let i = 0; const interval = setInterval(() => { setProgressText(texts[i % texts.length]); i++; }, 800); return () => clearInterval(interval); }, [loading]);
 
     const generateQuiz = async ({ mode, topic, sourceText, difficulty, numQuestions }) => {
@@ -454,12 +486,10 @@ const App = () => {
         } catch (err) { setError(err.message); } finally { setLoading(false); }
     };
 
-    // Main Render
     return (
         <div className={theme}>
             <div className="min-h-screen bg-slate-100 dark:bg-[#0f172a] text-slate-900 dark:text-white transition-colors duration-300 font-sans relative flex flex-col">
                 
-                {/* Header / Nav */}
                 <div className="px-6 py-4 flex justify-between items-center bg-white dark:bg-slate-900/50 backdrop-blur-md sticky top-0 z-40 border-b border-slate-200 dark:border-slate-700">
                      <div className="flex items-center gap-8">
                         <div className="flex items-center gap-2 font-bold text-xl tracking-tight"><span className="text-indigo-600 dark:text-[#00ffc8]"><Icons.Brain /></span> GenQuiz AI</div>
@@ -481,7 +511,6 @@ const App = () => {
                      </div>
                 </div>
 
-                {/* Content */}
                 <div className="flex-1 p-4 md:p-8 flex flex-col items-center">
                     {showAddModal && <AddSubjectModal onClose={() => setShowAddModal(false)} onSave={handleCreateSubject} />}
                     {showLoginModal && <LoginModal onLogin={handleLogin} onClose={() => setShowLoginModal(false)} />}
@@ -496,17 +525,24 @@ const App = () => {
 
                     {view === 'subject-detail' && <SubjectDetail subject={activeSubject} topics={activeTopics} onBack={() => setView('home')} onStartTopic={generateQuiz} />}
                     
+                    {/* 🔥 PASSING STRICT ANSWER LOGIC */}
                     {view === 'quiz' && (
                          <QuizView quizData={quizData} currentQ={currentQ} answers={answers} 
-                            onAnswer={(opt) => {
-                                const correct = quizData[currentQ].correctAnswer;
-                                setAnswers({...answers, [currentQ]: opt});
-                                if(isOptionCorrect(opt, correct)) setScore(s => s+1);
+                            onAnswer={(label) => {
+                                const correctLabel = quizData[currentQ].correctAnswer;
+                                setAnswers({...answers, [currentQ]: label}); // Store "A"
+                                if(label === correctLabel) setScore(s => s+1); // Compare "A" === "A"
                             }}
                             onNext={() => {
                                 if(currentQ < quizData.length -1) setCurrentQ(c => c+1);
                                 else {
-                                    if(user && activeSubject) handleTopicComplete(score + (isOptionCorrect(answers[currentQ], quizData[currentQ].correctAnswer)?1:0), quizData.length);
+                                    if(user && activeSubject) {
+                                        // Re-calculate correct answers for DB save just to be safe
+                                        const finalScore = Object.keys(answers).reduce((acc, qIdx) => {
+                                            return acc + (answers[qIdx] === quizData[qIdx].correctAnswer ? 1 : 0);
+                                        }, 0);
+                                        handleTopicComplete(finalScore, quizData.length);
+                                    }
                                     setView('result');
                                 }
                             }}
