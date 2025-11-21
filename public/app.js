@@ -4,6 +4,22 @@ const { useState, useRef, useEffect } = React;
 const auth = window.auth;
 const db = window.db;
 
+// 🔥 NEW: Smart Answer Checker Helper
+// Yeh check karega ki agar answer "A) Text" hai aur correct key "A" hai, toh bhi usse sahi maane.
+const isOptionCorrect = (option, correctKey) => {
+    if (!option || !correctKey) return false;
+    const cleanOpt = option.trim();
+    const cleanKey = correctKey.trim();
+    
+    // 1. Exact Match (agar AI ne poora text bheja)
+    if (cleanOpt === cleanKey) return true;
+    
+    // 2. Start Match (agar AI ne "A) Text" bheja aur key "A" hai)
+    if (cleanOpt.startsWith(cleanKey + ")") || cleanOpt.startsWith(cleanKey + ".")) return true;
+    
+    return false;
+};
+
 // --- Icons ---
 const Icons = {
     Brain: () => <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"/></svg>,
@@ -57,8 +73,6 @@ const SetupView = ({ user, stats, onGenerate, loading, error, progressText, onLo
     return (
         <div className="w-full max-w-5xl mx-auto fade-in">
             <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-700 transition-all duration-300">
-                
-                {/* Header */}
                 <div className="p-6 md:p-8 border-b border-slate-100 dark:border-slate-700/50 flex flex-col md:flex-row md:items-center justify-between gap-6">
                     <div className="flex items-center gap-4">
                         {user && user.photoURL ? (
@@ -89,10 +103,7 @@ const SetupView = ({ user, stats, onGenerate, loading, error, progressText, onLo
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2">
-                    {/* LEFT: Inputs */}
                     <div className="p-8 md:p-10 space-y-8">
-                        
-                        {/* Mode Select */}
                         <div>
                             <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 block">Select Mode</label>
                             <div className="flex gap-4">
@@ -101,7 +112,6 @@ const SetupView = ({ user, stats, onGenerate, loading, error, progressText, onLo
                             </div>
                         </div>
 
-                        {/* Topic/File Input */}
                         <div>
                             <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 block">{mode === 'topic' ? 'Enter Topic' : 'Upload Document'}</label>
                             {mode === 'topic' ? (
@@ -115,7 +125,6 @@ const SetupView = ({ user, stats, onGenerate, loading, error, progressText, onLo
                             )}
                         </div>
 
-                        {/* FIX 1: Difficulty Selector Re-added */}
                         <div>
                             <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 block">Difficulty</label>
                             <div className="flex gap-2">
@@ -135,7 +144,6 @@ const SetupView = ({ user, stats, onGenerate, loading, error, progressText, onLo
                             </div>
                         </div>
 
-                        {/* Questions Slider */}
                         <div>
                              <div className="flex justify-between mb-2"><label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Questions: {numQuestions}</label></div>
                             <input type="range" min="3" max="15" value={numQuestions} onChange={(e) => setNumQuestions(parseInt(e.target.value))} />
@@ -146,7 +154,6 @@ const SetupView = ({ user, stats, onGenerate, loading, error, progressText, onLo
                                 {loading ? <><Icons.Loader /> Generating...</> : "Generate Quiz"}
                             </button>
                             
-                            {/* FIX 2: AI Progress Bar/Text Re-added */}
                             {loading && (
                                 <div className="mt-3 text-center">
                                     <p className="text-xs text-indigo-600 dark:text-[#10b981] font-mono animate-pulse">{progressText}</p>
@@ -157,7 +164,6 @@ const SetupView = ({ user, stats, onGenerate, loading, error, progressText, onLo
                         </div>
                     </div>
 
-                    {/* RIGHT: Live Stats Dashboard */}
                     <div className="hidden md:flex bg-slate-50 dark:bg-slate-900/50 p-10 flex-col justify-center relative overflow-hidden border-l border-slate-200 dark:border-slate-700 transition-colors">
                         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-[0.05] dark:opacity-[0.1]"></div>
                         
@@ -205,7 +211,24 @@ const QuizView = ({ quizData, currentQ, answers, onAnswer, score, onNext, onQuit
                 <div className="p-8 md:p-10">
                     <div className="flex justify-between items-center mb-6"><span className="text-[10px] font-bold text-indigo-500 dark:text-[#10b981] bg-indigo-50 dark:bg-[#10b981]/10 px-3 py-1 rounded-full uppercase tracking-widest">Q{currentQ + 1} / {quizData.length}</span><button onClick={onQuit} className="text-slate-400 hover:text-red-500 text-xs font-bold uppercase tracking-widest">Quit</button></div>
                     <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-8 leading-snug transition-colors">{q.question}</h2>
-                    <div className="space-y-3">{q.options.map((opt, i) => { const isSelected = answers[currentQ] === opt; const isCorrect = opt === q.correctAnswer; let style = "w-full p-5 rounded-xl text-left font-medium border-2 transition-all duration-200 text-sm "; if (answered) { if (isCorrect) style += "border-green-500 bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400"; else if (isSelected) style += "border-red-500 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400"; else style += "border-transparent bg-slate-100 dark:bg-slate-700 text-slate-400 opacity-50"; } else { style += "border-transparent bg-slate-50 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:border-indigo-500 dark:hover:border-[#10b981] hover:bg-white dark:hover:bg-slate-600"; } return <button key={i} disabled={!!answered} onClick={() => onAnswer(opt)} className={style}>{opt}</button>; })}</div>
+                    <div className="space-y-3">
+                        {q.options.map((opt, i) => { 
+                            const isSelected = answers[currentQ] === opt; 
+                            
+                            // 🔥 UPDATED LOGIC: Use 'isOptionCorrect' helper
+                            const isCorrect = isOptionCorrect(opt, q.correctAnswer); 
+                            
+                            let style = "w-full p-5 rounded-xl text-left font-medium border-2 transition-all duration-200 text-sm "; 
+                            if (answered) { 
+                                if (isCorrect) style += "border-green-500 bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400"; 
+                                else if (isSelected) style += "border-red-500 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400"; 
+                                else style += "border-transparent bg-slate-100 dark:bg-slate-700 text-slate-400 opacity-50"; 
+                            } else { 
+                                style += "border-transparent bg-slate-50 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:border-indigo-500 dark:hover:border-[#10b981] hover:bg-white dark:hover:bg-slate-600"; 
+                            } 
+                            return <button key={i} disabled={!!answered} onClick={() => onAnswer(opt)} className={style}>{opt}</button>; 
+                        })}
+                    </div>
                     {answered && (<div className="mt-6 p-4 rounded-xl bg-indigo-50 dark:bg-slate-900 border border-indigo-100 dark:border-slate-600 text-slate-600 dark:text-slate-400 text-sm"><strong className="text-indigo-600 dark:text-[#10b981] block text-xs uppercase mb-1">Insight</strong>{q.explanation}</div>)}
                 </div>
                 {answered && (<div className="p-6 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-700 flex justify-end"><button onClick={onNext} className="px-8 py-3 bg-indigo-600 dark:bg-[#10b981] text-white dark:text-slate-900 rounded-xl font-bold shadow-lg flex items-center gap-2 hover:scale-105 transition transform">{currentQ < quizData.length - 1 ? "Next" : "Finish"} <Icons.ArrowRight /></button></div>)}
@@ -214,12 +237,11 @@ const QuizView = ({ quizData, currentQ, answers, onAnswer, score, onNext, onQuit
     );
 };
 
-// --- RESULT VIEW (Modified to show Insights/Notes) ---
+// --- RESULT VIEW (Updated with Smart Check) ---
 const ResultView = ({ score, total, user, topic, quizData, userAnswers, onRetry, onOpenLogin, saveResult }) => {
     const percentage = Math.round((score / total) * 100);
     const [saved, setSaved] = useState(false);
 
-    // Save automatically if logged in
     useEffect(() => {
         if (user && !saved) {
             saveResult(score, total, topic);
@@ -229,7 +251,6 @@ const ResultView = ({ score, total, user, topic, quizData, userAnswers, onRetry,
 
     return (
         <div className="w-full max-w-3xl mx-auto text-center fade-in pb-10">
-            {/* Score Card */}
             <div className="bg-white dark:bg-slate-800 rounded-3xl p-10 shadow-2xl border border-slate-200 dark:border-slate-700 transition-colors duration-300 mb-8">
                 <div className="w-24 h-24 mx-auto bg-indigo-100 dark:bg-[#10b981]/20 rounded-full flex items-center justify-center mb-6"><span className="text-3xl font-black text-indigo-600 dark:text-[#10b981]">{percentage}%</span></div>
                 <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-2 transition-colors">{percentage > 70 ? "Outstanding!" : "Good Effort!"}</h2>
@@ -245,13 +266,13 @@ const ResultView = ({ score, total, user, topic, quizData, userAnswers, onRetry,
                 </div>
             </div>
 
-            {/* FIX 3: Notes & Insights Section */}
             <div className="text-left space-y-6">
                 <h3 className="text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest text-xs text-center mb-6">Detailed Analysis & Notes</h3>
                 
                 {quizData.map((q, index) => {
                     const userAns = userAnswers[index];
-                    const isCorrect = userAns === q.correctAnswer;
+                    // 🔥 UPDATED LOGIC: Use 'isOptionCorrect' helper
+                    const isCorrect = isOptionCorrect(userAns, q.correctAnswer);
                     
                     return (
                         <div key={index} className="bg-white dark:bg-slate-800 rounded-2xl p-6 border border-slate-200 dark:border-slate-700 shadow-sm">
@@ -307,7 +328,6 @@ const App = () => {
     const [progressText, setProgressText] = useState('Initializing');
     const [currentTopic, setCurrentTopic] = useState(''); 
 
-    // Auth & Data Listener
     useEffect(() => {
         if(!auth) return;
         const unsubscribe = auth.onAuthStateChanged((u) => {
@@ -323,19 +343,9 @@ const App = () => {
     const fetchUserStats = async (u) => {
         try {
             const snapshot = await db.collection('users').doc(u.uid).collection('history').get();
-            if (snapshot.empty) {
-                setStats({ totalQuizzes: 0, avgScore: 0 });
-                return;
-            }
-            let totalScore = 0;
-            let totalMax = 0;
-            let count = 0;
-            snapshot.forEach(doc => {
-                const data = doc.data();
-                totalScore += data.score;
-                totalMax += data.total;
-                count++;
-            });
+            if (snapshot.empty) { setStats({ totalQuizzes: 0, avgScore: 0 }); return; }
+            let totalScore = 0; let totalMax = 0; let count = 0;
+            snapshot.forEach(doc => { const data = doc.data(); totalScore += data.score; totalMax += data.total; count++; });
             const avg = totalMax > 0 ? Math.round((totalScore / totalMax) * 100) : 0;
             setStats({ totalQuizzes: count, avgScore: avg });
         } catch (err) { console.error("Error fetching stats:", err); }
@@ -344,12 +354,7 @@ const App = () => {
     const saveQuizResult = async (s, t, topic) => {
         if (!user) return;
         try {
-            await db.collection('users').doc(user.uid).collection('history').add({
-                topic: topic || "Unknown",
-                score: s,
-                total: t,
-                date: new Date(),
-            });
+            await db.collection('users').doc(user.uid).collection('history').add({ topic: topic || "Unknown", score: s, total: t, date: new Date() });
             fetchUserStats(user); 
         } catch (err) { console.error("Error saving result:", err); }
     };
@@ -388,60 +393,28 @@ const App = () => {
         } catch (err) { setError("Error: " + err.message); } finally { setLoading(false); }
     };
 
-    const handleAnswer = (opt) => { const correct = quizData[currentQ].correctAnswer; setAnswers({ ...answers, [currentQ]: opt }); if (opt === correct) setScore(s => s + 1); };
+    // 🔥 UPDATED LOGIC: Use 'isOptionCorrect' helper
+    const handleAnswer = (opt) => { 
+        const correct = quizData[currentQ].correctAnswer; 
+        setAnswers({ ...answers, [currentQ]: opt }); 
+        if (isOptionCorrect(opt, correct)) setScore(s => s + 1); 
+    };
+    
     const handleNext = () => { if (currentQ < quizData.length - 1) setCurrentQ(c => c + 1); else setView('result'); };
 
     return (
         <div className={theme}>
             <div className="min-h-screen w-full bg-slate-100 dark:bg-[#0f172a] text-slate-900 dark:text-white transition-colors duration-500 flex flex-col p-4 md:p-8 relative font-sans">
-                
                 {showLoginModal && <LoginModal onLogin={handleLogin} onClose={() => setShowLoginModal(false)} />}
-
                 <div className="absolute top-6 right-6 z-50">
                     <button onClick={toggleTheme} className="p-3 rounded-full bg-white dark:bg-slate-800 shadow-lg border border-slate-200 dark:border-slate-700 hover:scale-110 transition">
                         {theme === 'dark' ? <Icons.Sun /> : <Icons.Moon />}
                     </button>
                 </div>
-
                 <div className="flex-1 flex items-center justify-center">
-                    {view === 'setup' && (
-                        <SetupView 
-                            user={user} 
-                            stats={stats} 
-                            onGenerate={generateQuiz} 
-                            loading={loading} 
-                            error={error} 
-                            progressText={progressText} 
-                            onLogout={handleLogout} 
-                            onOpenLogin={() => setShowLoginModal(true)} 
-                        />
-                    )}
-                    
-                    {view === 'quiz' && (
-                        <QuizView 
-                            quizData={quizData} 
-                            currentQ={currentQ} 
-                            answers={answers} 
-                            onAnswer={handleAnswer} 
-                            score={score} 
-                            onNext={handleNext} 
-                            onQuit={() => setView('setup')} 
-                        />
-                    )}
-                    
-                    {view === 'result' && (
-                        <ResultView 
-                            score={score} 
-                            total={quizData.length} 
-                            user={user}
-                            topic={currentTopic} 
-                            quizData={quizData}
-                            userAnswers={answers}
-                            saveResult={saveQuizResult} 
-                            onRetry={() => setView('setup')} 
-                            onOpenLogin={() => setShowLoginModal(true)}
-                        />
-                    )}
+                    {view === 'setup' && (<SetupView user={user} stats={stats} onGenerate={generateQuiz} loading={loading} error={error} progressText={progressText} onLogout={handleLogout} onOpenLogin={() => setShowLoginModal(true)} />)}
+                    {view === 'quiz' && (<QuizView quizData={quizData} currentQ={currentQ} answers={answers} onAnswer={handleAnswer} score={score} onNext={handleNext} onQuit={() => setView('setup')} />)}
+                    {view === 'result' && (<ResultView score={score} total={quizData.length} user={user} topic={currentTopic} quizData={quizData} userAnswers={answers} saveResult={saveQuizResult} onRetry={() => setView('setup')} onOpenLogin={() => setShowLoginModal(true)} />)}
                 </div>
             </div>
         </div>
