@@ -35,14 +35,46 @@ const Icons = {
     Zap: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
 };
 
-// --- ADD SUBJECT MODAL ---
+// --- 🔥 UPDATED ADD SUBJECT MODAL (With File Upload) ---
 const AddSubjectModal = ({ onClose, onSave }) => {
     const [name, setName] = useState('');
     const [syllabus, setSyllabus] = useState('');
     const [parsing, setParsing] = useState(false);
+    const [fileName, setFileName] = useState('');
+    const fileRef = useRef(null);
+
+    // 📄 New Function: Handle File Upload inside Modal
+    const handleFile = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setFileName(file.name);
+        setParsing(true); // Use parsing state to show "reading file..."
+
+        try {
+            let text = "";
+            if (file.type === 'application/pdf') {
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                const maxPages = Math.min(pdf.numPages, 15); 
+                for (let i = 1; i <= maxPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const textContent = await page.getTextContent();
+                    text += textContent.items.map(item => item.str).join(' ') + "\n";
+                }
+            } else {
+                text = await file.text();
+            }
+            // Auto-fill the textarea with extracted text
+            setSyllabus(text); 
+        } catch (err) {
+            alert("Error reading file: " + err.message);
+        } finally {
+            setParsing(false);
+        }
+    };
 
     const handleSubmit = async () => {
-        if (!name || !syllabus) return alert("Please fill all fields");
+        if (!name || !syllabus) return alert("Please provide a subject name and syllabus (text or file).");
         setParsing(true);
         try {
             const response = await fetch('/api/parse-syllabus', {
@@ -62,15 +94,27 @@ const AddSubjectModal = ({ onClose, onSave }) => {
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm fade-in p-4">
             <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 max-w-lg w-full shadow-2xl border border-slate-200 dark:border-slate-700">
-                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">Add New Subject</h2>
+                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">Add New Subject</h2>
+                
                 <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Subject Name</label>
-                <input value={name} onChange={e => setName(e.target.value)} className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 mb-4" placeholder="e.g. Physics" />
-                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Paste Syllabus</label>
-                <textarea value={syllabus} onChange={e => setSyllabus(e.target.value)} className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 mb-6 h-32" placeholder="Unit 1: Motion, Unit 2: Force..." />
+                <input value={name} onChange={e => setName(e.target.value)} className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 mb-4 focus:outline-none focus:border-indigo-500" placeholder="e.g. Physics" />
+
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Syllabus Source</label>
+                
+                {/* File Upload Area */}
+                <div onClick={() => fileRef.current.click()} className="w-full p-4 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition mb-4">
+                    <div className="text-slate-400 dark:text-slate-500 mb-2"><Icons.Upload /></div>
+                    <p className="text-sm font-medium text-slate-600 dark:text-slate-300">{fileName || "Click to Upload Syllabus (PDF/TXT)"}</p>
+                    <input type="file" ref={fileRef} className="hidden" accept=".pdf,.txt" onChange={handleFile} />
+                </div>
+
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Or Paste Text (Editable)</label>
+                <textarea value={syllabus} onChange={e => setSyllabus(e.target.value)} className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 mb-6 h-24 focus:outline-none focus:border-indigo-500" placeholder="Unit 1: Motion, Unit 2: Force..." />
+
                 <div className="flex gap-3">
                     <button onClick={onClose} className="flex-1 py-3 rounded-xl border border-slate-200 dark:border-slate-600 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700">Cancel</button>
                     <button onClick={handleSubmit} disabled={parsing} className="flex-1 py-3 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 flex justify-center items-center gap-2">
-                        {parsing ? <Icons.Loader /> : "Create Subject"}
+                        {parsing ? <><Icons.Loader /> Processing...</> : "Create Subject"}
                     </button>
                 </div>
             </div>
