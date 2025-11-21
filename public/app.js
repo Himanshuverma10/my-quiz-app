@@ -1,16 +1,16 @@
 const { useState, useRef, useEffect } = React;
 
-// --- Icons ---
+// --- Minimal Icons (Stroke styles updated) ---
 const Icons = {
-    Brain: () => <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#00ffc8" strokeWidth="2"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"/></svg>,
+    Brain: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-indigo-600"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"/></svg>,
     ArrowRight: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>,
-    Trophy: () => <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.8)]"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>,
-    Loader: () => <svg className="animate-spin text-purple-400" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>,
-    Check: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>,
-    Cross: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    Loader: () => <svg className="animate-spin text-indigo-600" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>,
+    Check: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>,
+    Cross: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+    Upload: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
 };
 
-// --- 1. SETUP VIEW (New Cyberpunk Design) ---
+// --- 1. SETUP VIEW (Clean Minimalist) ---
 const SetupView = ({ onGenerate, loading, error, progressText }) => {
     const [mode, setMode] = useState('topic');
     const [topic, setTopic] = useState('');
@@ -19,24 +19,6 @@ const SetupView = ({ onGenerate, loading, error, progressText }) => {
     const [fileName, setFileName] = useState('');
     const [sourceText, setSourceText] = useState('');
     const fileRef = useRef(null);
-    const cardRef = useRef(null);
-
-    // 3D Tilt Effect logic moved here for app.js
-    const handleMouseMove = (e) => {
-        if (!cardRef.current) return;
-        const rect = cardRef.current.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-        const centerX = rect.width / 2;
-        const centerY = rect.height / 2;
-        const rotateX = ((y - centerY) / 40) * -1;
-        const rotateY = (x - centerX) / 40;
-        cardRef.current.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
-    };
-
-    const handleMouseLeave = () => {
-        if (cardRef.current) cardRef.current.style.transform = `perspective(1000px) rotateX(0deg) rotateY(0deg)`;
-    };
 
     const handleFile = async (e) => {
         const file = e.target.files?.[0];
@@ -62,158 +44,121 @@ const SetupView = ({ onGenerate, loading, error, progressText }) => {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center relative overflow-hidden p-4 bg-[#050505] text-white" onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}>
-            {/* ✨ Animated neon gradient background + moving neon grid */}
-            <div className="absolute inset-0 -z-20 opacity-20 animate-grid-move bg-[radial-gradient(circle,rgba(0,255,200,0.35)_1px,transparent_1px)] [background-size:40px_40px]" />
-            <div className="absolute inset-0 -z-10 bg-gradient-to-br from-[#2a0034] via-[#38002e] to-[#1a001f] animate-pulse-slow opacity-40" />
-
-            {/* 🔵 Floating neon blobs */}
-            <div className="absolute -top-20 left-10 w-96 h-96 rounded-full bg-[#ff2ec4] blur-[140px] opacity-50 animate-float-slow" />
-            <div className="absolute bottom-0 right-0 w-[500px] h-[500px] rounded-full bg-[#ff7b00] blur-[180px] opacity-40 animate-float-slower" />
-
-            {/* 🔥 Neon 3D Glass Card */}
-            <div ref={cardRef} className="max-w-4xl w-full p-[2px] rounded-3xl bg-gradient-to-r from-purple-500 to-blue-500 shadow-[0_0_40px_rgba(138,43,226,0.6)] relative z-10 tilt-card"> 
-                <div className="bg-black/80 backdrop-blur-2xl rounded-3xl p-8 md:p-12 border border-white/10 shadow-[0_0_25px_rgba(0,255,255,0.2)]"> 
-                    
-                    <div className="text-center mb-10">
-                        <div className="flex justify-center mb-4">
-                            <div className="p-3 rounded-2xl bg-white/5 border border-white/10 shadow-[0_0_15px_rgba(0,255,200,0.3)]">
-                                <Icons.Brain />
-                            </div>
-                        </div>
-                        <h1 className="text-5xl font-black text-center drop-shadow-[0_0_10px_rgba(0,255,255,0.7)] tracking-tight text-white">GenQuiz AI</h1>
-                        <p className="text-center text-gray-400 mt-2 font-medium tracking-widest text-sm">CYBERPUNK EDITION • 2.5 PRO</p>
+        <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[#f8fafc]">
+            
+            {/* Main Card */}
+            <div className="max-w-xl w-full bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 p-8 md:p-10 fade-in"> 
+                
+                {/* Header */}
+                <div className="text-center mb-10">
+                    <div className="inline-flex items-center justify-center p-3 bg-indigo-50 rounded-xl mb-4">
+                        <Icons.Brain />
                     </div>
+                    <h1 className="text-3xl font-bold text-slate-900 tracking-tight">GenQuiz AI</h1>
+                    <p className="text-slate-500 mt-2 text-sm">Generate quizzes from any topic or file in seconds.</p>
+                </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Tabs */}
+                <div className="flex bg-slate-100 p-1 rounded-xl mb-8">
+                    <button onClick={() => setMode('topic')} className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all ${mode==='topic' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Topic</button>
+                    <button onClick={() => setMode('file')} className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all ${mode==='file' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Upload File</button>
+                </div>
 
-                        {/* ◼ Mode Selector Card */}
-                        <div className="p-8 rounded-2xl bg-black/40 border border-purple-500/30 shadow-[0_0_20px_rgba(138,43,226,0.15)] flex flex-col justify-between">
-                            <div>
-                                <h2 className="text-sm font-bold mb-4 text-purple-300 uppercase tracking-wider">Setup Configuration</h2>
-
-                                <div className="flex gap-3 mb-6">
-                                    <button onClick={() => setMode('topic')} className={`flex-1 py-3 rounded-xl font-bold transition-all duration-300 ${mode==='topic' ? 'bg-purple-600 text-white shadow-[0_0_15px_rgba(168,85,247,0.6)]' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}>Topic</button>
-                                    <button onClick={() => setMode('file')} className={`flex-1 py-3 rounded-xl font-bold transition-all duration-300 ${mode==='file' ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.6)]' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}>File</button>
-                                </div>
-
-                                {mode === 'topic' ? (
-                                    <input
-                                        value={topic}
-                                        onChange={(e) => setTopic(e.target.value)}
-                                        placeholder="Enter topic (e.g., Quantum Physics)..."
-                                        className="w-full p-4 rounded-xl bg-black/40 border border-purple-500/30 placeholder-purple-300/30 focus:outline-none focus:border-purple-400 focus:shadow-[0_0_10px_rgba(168,85,247,0.3)] text-white transition"
-                                    />
-                                ) : (
-                                    <>
-                                        <div onClick={() => fileRef.current.click()} className={`w-full p-8 rounded-xl border-2 border-dashed text-center cursor-pointer transition ${fileName ? 'border-blue-500 bg-blue-500/10 text-blue-300' : 'border-blue-500/30 bg-black/20 text-gray-500 hover:border-blue-400'}`}>
-                                            <p className="text-sm font-bold">{fileName || "Click to Upload PDF/TXT"}</p>
-                                        </div>
-                                        <input type="file" ref={fileRef} className="hidden" accept=".pdf,.txt" onChange={handleFile} />
-                                    </>
-                                )}
-                                
-                                <div className="mt-6">
-                                    <div className="flex justify-between mb-2 text-xs font-bold text-gray-400 uppercase">
-                                        <span>Difficulty</span>
-                                        <span className="text-purple-400">{difficulty}</span>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        {['Easy', 'Medium', 'Hard'].map(d => (
-                                            <button key={d} onClick={() => setDifficulty(d)} className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition ${difficulty === d ? 'border-purple-500 bg-purple-500/20 text-white' : 'border-gray-700 bg-transparent text-gray-500'}`}>{d}</button>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                <div className="mt-6">
-                                    <div className="flex justify-between mb-2 text-xs font-bold text-gray-400 uppercase">
-                                        <span>Questions: {numQuestions}</span>
-                                    </div>
-                                    <input type="range" min="3" max="15" value={numQuestions} onChange={(e) => setNumQuestions(parseInt(e.target.value))} />
-                                </div>
-                            </div>
-
-                            {error && <div className="mt-4 p-3 rounded-lg bg-red-500/20 border border-red-500/50 text-red-200 text-xs text-center">{error}</div>}
-
-                            <button 
-                                onClick={() => onGenerate({ mode, topic, sourceText, difficulty, numQuestions })}
-                                disabled={loading}
-                                className="mt-6 w-full py-4 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 shadow-[0_0_20px_rgba(120,80,255,0.4)] font-bold text-white hover:shadow-[0_0_30px_rgba(120,80,255,0.6)] hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
-                            >
-                                {loading ? <><Icons.Loader /> Processing...</> : "GENERATE QUIZ"}
-                            </button>
-                            
-                            {loading && (
-                                <div className="mt-3 text-center">
-                                    <p className="text-[10px] text-blue-400 font-mono animate-pulse">{progressText}</p>
-                                </div>
-                            )}
+                {/* Inputs */}
+                <div className="space-y-6">
+                    {mode === 'topic' ? (
+                        <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">What should we quiz you on?</label>
+                            <input
+                                value={topic}
+                                onChange={(e) => setTopic(e.target.value)}
+                                placeholder="e.g. Quantum Physics, History of Rome..."
+                                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition"
+                            />
                         </div>
-
-                        {/* ◼ Live Preview Card */}
-                        <div className="hidden md:flex p-8 rounded-2xl bg-black/40 border border-blue-500/30 shadow-[0_0_20px_rgba(80,120,255,0.15)] flex-col justify-center relative overflow-hidden">
-                            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5"></div>
-                            <h2 className="text-sm font-bold mb-6 text-blue-300 uppercase tracking-wider z-10">Live Simulation</h2>
-
-                            <div className="p-5 rounded-xl bg-gradient-to-br from-black/60 to-blue-900/20 border border-blue-500/30 shadow-inner backdrop-blur-sm z-10">
-                                <p className="font-semibold text-white text-sm mb-4">Q1: {topic ? `Questions about "${topic}" will appear here.` : "AI generated questions will appear here."}</p>
-
-                                <div className="space-y-2 text-xs">
-                                    <div className="p-3 rounded-lg bg-black/50 border border-purple-500/20 text-gray-400">A. Plausible Distractor</div>
-                                    <div className="p-3 rounded-lg bg-blue-900/30 border border-blue-400/50 text-blue-200 shadow-[0_0_10px_rgba(0,150,255,0.2)] font-bold">B. Correct Answer</div>
-                                    <div className="p-3 rounded-lg bg-black/50 border border-purple-500/20 text-gray-400">C. Another Option</div>
-                                </div>
+                    ) : (
+                        <div>
+                             <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Source Material</label>
+                            <div onClick={() => fileRef.current.click()} className={`w-full p-8 rounded-xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition hover:bg-slate-50 ${fileName ? 'border-indigo-500 bg-indigo-50/50' : 'border-slate-200'}`}>
+                                <div className="mb-2 text-slate-400"><Icons.Upload /></div>
+                                <p className="text-sm font-medium text-slate-600">{fileName || "Drop PDF or TXT here"}</p>
                             </div>
-
-                            <div className="mt-6 text-xs text-blue-300/70 p-4 border rounded-xl bg-blue-900/10 border-blue-500/20 z-10">
-                                <p className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span> AI Model Active</p>
-                                <p className="mt-1 opacity-70">Explanations & theory breakdown included.</p>
-                            </div>
+                            <input type="file" ref={fileRef} className="hidden" accept=".pdf,.txt" onChange={handleFile} />
                         </div>
-
+                    )}
+                    
+                    {/* Controls Row */}
+                    <div className="grid grid-cols-2 gap-6">
+                        <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Difficulty</label>
+                            <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:outline-none focus:border-indigo-500">
+                                <option>Easy</option>
+                                <option>Medium</option>
+                                <option>Hard</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Questions: {numQuestions}</label>
+                            <input type="range" min="3" max="15" value={numQuestions} onChange={(e) => setNumQuestions(parseInt(e.target.value))} className="mt-3" />
+                        </div>
                     </div>
                 </div>
+
+                {error && <div className="mt-6 p-4 rounded-xl bg-red-50 text-red-600 text-sm text-center border border-red-100">{error}</div>}
+
+                <button 
+                    onClick={() => onGenerate({ mode, topic, sourceText, difficulty, numQuestions })}
+                    disabled={loading}
+                    className="mt-8 w-full py-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold shadow-lg shadow-slate-200 transition-all disabled:opacity-70 flex justify-center items-center gap-2"
+                >
+                    {loading ? <><Icons.Loader /> Generating...</> : "Start Quiz"}
+                </button>
+                
+                {loading && (
+                    <p className="mt-4 text-center text-xs text-slate-400 animate-pulse">{progressText}</p>
+                )}
             </div>
         </div>
     );
 };
 
-// --- 2. QUIZ VIEW (Dark Mode) ---
+// --- 2. QUIZ VIEW (Clean Card) ---
 const QuizView = ({ quizData, currentQ, answers, onAnswer, score, onNext, onQuit }) => {
     const q = quizData[currentQ];
     const answered = answers[currentQ];
     const progress = ((currentQ + 1) / quizData.length) * 100;
     
     return (
-        <div className="min-h-screen flex items-center justify-center p-4 bg-[#050505]">
-            <div className="max-w-2xl w-full bg-[#0f172a] shadow-2xl rounded-3xl overflow-hidden border border-slate-700 relative z-10">
-                {/* Progress Bar */}
-                <div className="h-1.5 bg-slate-800 w-full">
-                    <div className="h-full bg-gradient-to-r from-purple-500 to-blue-500 transition-all duration-500 shadow-[0_0_10px_rgba(138,43,226,0.7)]" style={{ width: `${progress}%` }}></div>
+        <div className="min-h-screen flex items-center justify-center p-4 bg-[#f8fafc]">
+            <div className="max-w-2xl w-full bg-white shadow-xl shadow-slate-200/60 rounded-2xl overflow-hidden border border-slate-100 fade-in">
+                
+                {/* Progress Line */}
+                <div className="h-1 bg-slate-100 w-full">
+                    <div className="h-full bg-indigo-600 transition-all duration-500" style={{ width: `${progress}%` }}></div>
                 </div>
                 
-                <div className="p-8 md:p-10">
+                <div className="p-8 md:p-12">
                     <div className="flex justify-between items-center mb-8">
-                        <span className="text-[10px] font-bold text-blue-400 bg-blue-900/20 px-3 py-1 rounded-full uppercase tracking-widest border border-blue-500/20">
+                        <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full uppercase tracking-wider">
                             Question {currentQ + 1} / {quizData.length}
                         </span>
-                        <button onClick={onQuit} className="text-slate-500 hover:text-red-400 font-bold text-[10px] uppercase tracking-widest transition">Quit</button>
+                        <button onClick={onQuit} className="text-slate-400 hover:text-red-500 text-xs font-bold uppercase tracking-widest transition">Exit</button>
                     </div>
 
-                    <h2 className="text-2xl font-bold text-white mb-8 leading-snug">{q.question}</h2>
+                    <h2 className="text-2xl md:text-3xl font-bold text-slate-800 mb-8 leading-snug">{q.question}</h2>
                     
                     <div className="space-y-3">
                         {q.options.map((opt, i) => {
                             const isSelected = answers[currentQ] === opt;
                             const isCorrect = opt === q.correctAnswer;
-                            let style = "w-full p-5 rounded-xl text-left font-medium border transition-all duration-200 ";
+                            let style = "w-full p-4 md:p-5 rounded-xl text-left font-medium border transition-all duration-200 text-sm md:text-base ";
                             
                             if (answered) {
-                                if (isCorrect) style += "border-green-500 bg-green-500/10 text-green-400 shadow-[0_0_15px_rgba(34,197,94,0.2)]";
-                                else if (isSelected) style += "border-red-500 bg-red-500/10 text-red-400";
-                                else style += "border-slate-700 bg-slate-800/50 text-slate-500 opacity-50";
+                                if (isCorrect) style += "border-green-500 bg-green-50 text-green-700";
+                                else if (isSelected) style += "border-red-500 bg-red-50 text-red-700";
+                                else style += "border-slate-100 text-slate-400 opacity-60";
                             } else {
-                                style += "border-slate-700 bg-slate-800/50 text-slate-300 hover:border-purple-500 hover:bg-purple-500/10 hover:text-white";
+                                style += "border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700";
                             }
 
                             return <button key={i} disabled={!!answered} onClick={() => onAnswer(opt)} className={style}>{opt}</button>;
@@ -221,83 +166,79 @@ const QuizView = ({ quizData, currentQ, answers, onAnswer, score, onNext, onQuit
                     </div>
 
                     {answered && (
-                        <div className="mt-8 p-5 bg-blue-900/10 text-blue-200 rounded-2xl border border-blue-500/20 text-sm animate-in fade-in slide-in-from-bottom-2 duration-500">
-                            <strong className="block text-blue-400 text-[10px] uppercase tracking-wider mb-2 flex items-center gap-2">
-                                <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shadow-[0_0_5px_blue]"></span> Theory Insight
-                            </strong>
-                            <p className="leading-relaxed opacity-90">{q.explanation}</p>
+                        <div className="mt-8 p-5 bg-slate-50 rounded-xl border border-slate-100 text-slate-600 text-sm leading-relaxed fade-in">
+                            <strong className="block text-slate-800 text-xs uppercase tracking-wide mb-2">Explanation</strong>
+                            {q.explanation}
                         </div>
                     )}
                 </div>
                 
-                <div className="p-6 bg-slate-900/50 border-t border-slate-800 flex justify-end">
-                    {answered && (
-                        <button onClick={onNext} className="px-8 py-3 bg-white text-black rounded-xl font-bold shadow-lg hover:bg-gray-200 flex items-center gap-2 transition transform active:scale-95">
-                            {currentQ < quizData.length - 1 ? "Next Question" : "Finish Quiz"} <Icons.ArrowRight />
+                {answered && (
+                    <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end">
+                        <button onClick={onNext} className="px-6 py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg hover:bg-slate-800 flex items-center gap-2 transition">
+                            {currentQ < quizData.length - 1 ? "Next Question" : "See Results"} <Icons.ArrowRight />
                         </button>
-                    )}
-                </div>
+                    </div>
+                )}
             </div>
         </div>
     );
 };
 
-// --- 3. RESULT VIEW (Dark Mode) ---
+// --- 3. RESULT VIEW (Clean Dashboard) ---
 const ResultView = ({ score, total, quizData, userAnswers, onRetry }) => {
     const percentage = Math.round((score / total) * 100);
+    let message = "Keep Practicing!";
+    if (percentage > 80) message = "Excellent Work!";
+    else if (percentage > 50) message = "Good Effort!";
     
     return (
-        <div className="min-h-screen bg-[#050505] p-6 text-white">
-            <div className="max-w-4xl mx-auto">
+        <div className="min-h-screen bg-[#f8fafc] p-6 flex justify-center">
+            <div className="max-w-3xl w-full fade-in">
                 
                 {/* Score Card */}
-                <div className="bg-[#0f172a] rounded-[2.5rem] p-10 text-center border border-slate-700 shadow-[0_0_50px_rgba(0,0,0,0.5)] mb-8 relative overflow-hidden">
-                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-500 to-blue-500"></div>
-                    <div className="w-24 h-24 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner border border-slate-700">
-                        <Icons.Trophy />
-                    </div>
-                    <h2 className="text-7xl font-black text-white mb-2 tracking-tighter drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]">{percentage}%</h2>
-                    <p className="text-slate-400 font-medium text-lg mb-8">You scored <span className="text-white font-bold">{score}</span> out of {total}</p>
+                <div className="bg-white rounded-2xl p-10 text-center shadow-lg shadow-slate-200/50 border border-slate-100 mb-8">
+                    <p className="text-slate-400 font-bold text-xs uppercase tracking-widest mb-4">{message}</p>
+                    <h2 className="text-6xl font-black text-slate-900 mb-2">{percentage}%</h2>
+                    <p className="text-slate-500 font-medium mb-8">You scored {score} out of {total}</p>
                     
-                    <button onClick={onRetry} className="px-10 py-4 bg-white text-black hover:bg-gray-200 rounded-2xl font-bold shadow-lg transition transform hover:scale-105">
+                    <button onClick={onRetry} className="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-md transition">
                         Create New Quiz
                     </button>
                 </div>
 
                 {/* Analysis */}
-                <div className="space-y-6">
-                    <h3 className="text-gray-500 font-bold uppercase tracking-widest text-xs text-center mb-8">Performance Breakdown</h3>
+                <div className="space-y-4">
+                    <h3 className="text-slate-400 font-bold uppercase tracking-widest text-xs ml-2 mb-4">Review Answers</h3>
                     
                     {quizData.map((q, index) => {
                         const userAns = userAnswers[index];
                         const isCorrect = userAns === q.correctAnswer;
                         
                         return (
-                            <div key={index} className={`bg-[#0f172a] rounded-2xl p-6 border ${isCorrect ? 'border-green-500/30' : 'border-red-500/30'}`}>
+                            <div key={index} className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
                                 <div className="flex items-start gap-4">
-                                    <div className={`mt-1 w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${isCorrect ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                                    <div className={`mt-1 w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${isCorrect ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
                                         {isCorrect ? <Icons.Check /> : <Icons.Cross />}
                                     </div>
                                     <div className="w-full">
-                                        <h4 className="text-lg font-bold text-white mb-4">{q.question}</h4>
+                                        <h4 className="text-lg font-bold text-slate-800 mb-3">{q.question}</h4>
                                         
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                            <div className={`p-3 rounded-lg text-sm border ${isCorrect ? 'bg-green-500/10 border-green-500/50 text-green-300' : 'bg-red-500/10 border-red-500/50 text-red-300'}`}>
-                                                <span className="block text-[10px] uppercase font-bold opacity-70 mb-1">Your Answer</span>
-                                                {userAns}
+                                        <div className="flex flex-wrap gap-3 mb-4 text-sm">
+                                            <div className={`px-3 py-2 rounded-lg border ${isCorrect ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
+                                                <span className="font-bold text-xs opacity-70 block">YOUR ANSWER</span> {userAns}
                                             </div>
                                             {!isCorrect && (
-                                                <div className="p-3 rounded-lg text-sm bg-slate-800 border border-slate-700 text-slate-300">
-                                                    <span className="block text-[10px] uppercase font-bold opacity-70 mb-1 text-blue-400">Correct Answer</span>
-                                                    {q.correctAnswer}
+                                                <div className="px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-slate-700">
+                                                    <span className="font-bold text-xs opacity-70 block">CORRECT ANSWER</span> {q.correctAnswer}
                                                 </div>
                                             )}
                                         </div>
 
-                                        <div className="bg-black/30 p-4 rounded-xl border border-white/5">
-                                            <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider block mb-2">Deep Dive</span>
-                                            <p className="text-sm text-slate-400 leading-relaxed">{q.explanation}</p>
-                                        </div>
+                                        <p className="text-sm text-slate-500 leading-relaxed bg-slate-50 p-3 rounded-lg border border-slate-100">
+                                            <span className="font-bold text-slate-700 mr-1">Note:</span>
+                                            {q.explanation}
+                                        </p>
                                     </div>
                                 </div>
                             </div>
@@ -320,10 +261,9 @@ const App = () => {
     const [error, setError] = useState('');
     const [progressText, setProgressText] = useState('Initializing');
 
-    // Fake progress steps for UI effect
     useEffect(() => {
         if (!loading) return;
-        const texts = ["INITIALIZING AI...", "SCANNING KNOWLEDGE BASE...", "GENERATING QUESTIONS...", "FINALIZING QUIZ..."];
+        const texts = ["Processing Request...", "Consulting AI Model...", "Drafting Questions...", "Finalizing Quiz..."];
         let i = 0;
         const interval = setInterval(() => {
             setProgressText(texts[i % texts.length]);
