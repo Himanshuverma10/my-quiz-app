@@ -4,16 +4,14 @@ const { useState, useRef, useEffect } = React;
 const auth = window.auth;
 const db = window.db;
 
-// --- HELPERS ---
-
-// 1. Get Letter Label based on Index (0->A, 1->B, etc.)
-const getLabel = (index) => String.fromCharCode(65 + index); // 65 is ASCII for 'A'
-
-// 2. Clean Option Text (Removes "A)", "1.", "a." from the start if AI adds them)
-const cleanOptionText = (text) => {
-    if(!text) return "";
-    // Regex to remove "A)", "A.", "1)", "1." at the start
-    return text.replace(/^[A-Da-d0-9]+[\)\.]\s*/, "").trim();
+// Helper: Check if option is correct
+const isOptionCorrect = (option, correctKey) => {
+    if (!option || !correctKey) return false;
+    const cleanOpt = option.trim();
+    const cleanKey = correctKey.trim();
+    if (cleanOpt === cleanKey) return true;
+    if (cleanOpt.startsWith(cleanKey + ")") || cleanOpt.startsWith(cleanKey + ".")) return true;
+    return false;
 };
 
 // --- Icons ---
@@ -34,7 +32,15 @@ const Icons = {
     CheckCircle: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>,
     Play: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>,
     ArrowLeft: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>,
-    Zap: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+    Zap: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>,
+    Clock: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+};
+
+// --- HELPERS ---
+const getLabel = (index) => String.fromCharCode(65 + index);
+const cleanOptionText = (text) => {
+    if(!text) return "";
+    return text.replace(/^[A-Da-d0-9]+[\)\.]\s*/, "").trim();
 };
 
 // --- ADD SUBJECT MODAL ---
@@ -273,7 +279,62 @@ const SubjectDetail = ({ subject, topics, onBack, onStartTopic }) => (
     </div>
 );
 
-// --- 🔥 FIXED QUIZ VIEW (Separate Label from Text) ---
+// --- TAB 3: HISTORY DASHBOARD ---
+const HistoryDashboard = ({ user, onOpenLogin, onSelectHistory }) => {
+    const [history, setHistory] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        if (!user) return;
+        const fetchHistory = async () => {
+            const snap = await db.collection('users').doc(user.uid).collection('history').orderBy('date', 'desc').get();
+            const hist = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setHistory(hist);
+            setLoading(false);
+        };
+        fetchHistory();
+    }, [user]);
+
+    if (!user) {
+        return (
+            <div className="w-full max-w-2xl mx-auto text-center py-20 fade-in">
+                <div className="w-24 h-24 bg-slate-200 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-6"><Icons.Lock /></div>
+                <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">History Locked</h1>
+                <p className="text-slate-500 dark:text-slate-400 mb-8">Login to see your past quiz performance and review answers.</p>
+                <button onClick={onOpenLogin} className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg hover:bg-indigo-700 transition">Login to Unlock</button>
+            </div>
+        );
+    }
+
+    return (
+        <div className="w-full max-w-4xl mx-auto fade-in p-4">
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">Quiz History</h1>
+            
+            {loading ? <div className="text-center p-10"><Icons.Loader /></div> : history.length === 0 ? (
+                <div className="text-center py-20 bg-white dark:bg-slate-800 rounded-3xl border border-dashed border-slate-300 dark:border-slate-700">
+                    <div className="text-slate-300 mb-4 flex justify-center"><Icons.Clock /></div>
+                    <h3 className="text-lg font-bold text-slate-500 dark:text-slate-400">No quizzes taken yet</h3>
+                </div>
+            ) : (
+                <div className="space-y-4">
+                    {history.map((item) => (
+                        <div key={item.id} className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex justify-between items-center hover:border-indigo-500 dark:hover:border-[#10b981] transition">
+                            <div>
+                                <h3 className="font-bold text-slate-900 dark:text-white mb-1">{item.topic}</h3>
+                                <p className="text-xs text-slate-500 dark:text-slate-400">
+                                    {item.date?.toDate ? item.date.toDate().toLocaleDateString() : 'Just now'} • Score: {item.score}/{item.total}
+                                </p>
+                            </div>
+                            <button onClick={() => onSelectHistory(item)} className="px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg text-sm font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/30 hover:text-indigo-600 dark:hover:text-indigo-400 transition">Review</button>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+};
+
+// --- QUIZ VIEW ---
 const QuizView = ({ quizData, currentQ, answers, onAnswer, onNext, onQuit }) => {
     const q = quizData[currentQ];
     const answered = answers[currentQ];
@@ -289,48 +350,28 @@ const QuizView = ({ quizData, currentQ, answers, onAnswer, onNext, onQuit }) => 
                     
                     <div className="space-y-3">
                         {q.options.map((optText, i) => {
-                            // 1. Generate Label (A, B, C, D)
                             const label = getLabel(i); 
-                            // 2. Clean Content (Remove "A)", "1." from text)
                             const content = cleanOptionText(optText);
-                            
-                            // 3. Check status using LABEL
                             const isSel = answers[currentQ] === label;
-                            const isRight = label === q.correctAnswer; // Compare "A" with "A"
-                            
+                            const isRight = label === q.correctAnswer; 
                             let containerStyle = "w-full flex items-stretch rounded-xl overflow-hidden border-2 transition-all duration-200 cursor-pointer ";
                             let labelStyle = "w-12 flex items-center justify-center font-bold text-lg border-r-2 ";
                             let textStyle = "flex-1 p-4 text-left font-medium text-sm flex items-center ";
                             
                             if (answered) {
                                 if (isRight) {
-                                    containerStyle += "border-green-500 bg-green-50 dark:bg-green-900/20";
-                                    labelStyle += "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 border-green-500";
-                                    textStyle += "text-green-800 dark:text-green-300";
+                                    containerStyle += "border-green-500 bg-green-50 dark:bg-green-900/20"; labelStyle += "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 border-green-500"; textStyle += "text-green-800 dark:text-green-300";
                                 } else if (isSel) {
-                                    containerStyle += "border-red-500 bg-red-50 dark:bg-red-900/20";
-                                    labelStyle += "bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400 border-red-500";
-                                    textStyle += "text-red-800 dark:text-red-300";
+                                    containerStyle += "border-red-500 bg-red-50 dark:bg-red-900/20"; labelStyle += "bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400 border-red-500"; textStyle += "text-red-800 dark:text-red-300";
                                 } else {
-                                    containerStyle += "border-slate-200 dark:border-slate-700 opacity-50";
-                                    labelStyle += "bg-slate-100 dark:bg-slate-700 border-slate-200 dark:border-slate-700 text-slate-500";
-                                    textStyle += "text-slate-500 dark:text-slate-400";
+                                    containerStyle += "border-slate-200 dark:border-slate-700 opacity-50"; labelStyle += "bg-slate-100 dark:bg-slate-700 border-slate-200 dark:border-slate-700 text-slate-500"; textStyle += "text-slate-500 dark:text-slate-400";
                                 }
                             } else {
-                                containerStyle += "border-slate-200 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-[#10b981] bg-white dark:bg-slate-800";
-                                labelStyle += "bg-slate-100 dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 group-hover:text-indigo-500";
-                                textStyle += "text-slate-700 dark:text-slate-300";
+                                containerStyle += "border-slate-200 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-[#10b981] bg-white dark:bg-slate-800"; labelStyle += "bg-slate-100 dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 group-hover:text-indigo-500"; textStyle += "text-slate-700 dark:text-slate-300";
                             }
-
-                            return (
-                                <div key={i} onClick={() => !answered && onAnswer(label)} className={containerStyle}>
-                                    <div className={labelStyle}>{label}</div>
-                                    <div className={textStyle}>{content}</div>
-                                </div>
-                            );
+                            return (<div key={i} onClick={() => !answered && onAnswer(label)} className={containerStyle}><div className={labelStyle}>{label}</div><div className={textStyle}>{content}</div></div>);
                         })}
                     </div>
-                    
                     {answered && <div className="mt-6 p-4 rounded-xl bg-indigo-50 dark:bg-slate-900 border border-indigo-100 dark:border-slate-600 text-slate-600 dark:text-slate-400 text-sm"><strong className="text-indigo-600 dark:text-[#10b981] block text-xs uppercase mb-1">Insight</strong>{q.explanation}</div>}
                 </div>
                 {answered && <div className="p-6 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-700 flex justify-end"><button onClick={onNext} className="px-8 py-3 bg-indigo-600 dark:bg-[#10b981] text-white dark:text-slate-900 rounded-xl font-bold shadow-lg flex items-center gap-2 hover:scale-105 transition transform">{currentQ < quizData.length - 1 ? "Next" : "Finish"} <Icons.ArrowRight /></button></div>}
@@ -339,48 +380,50 @@ const QuizView = ({ quizData, currentQ, answers, onAnswer, onNext, onQuit }) => 
     );
 };
 
-// --- 🔥 FIXED RESULT VIEW (Separate Label from Text) ---
-const ResultView = ({ score, total, user, quizData, userAnswers, onRetry, onOpenLogin }) => {
+// --- RESULT VIEW ---
+const ResultView = ({ score, total, user, quizData, userAnswers, onRetry, onOpenLogin, saveResult, isReviewMode }) => {
     const percentage = Math.round((score / total) * 100);
+    const [saved, setSaved] = useState(false);
+
+    useEffect(() => {
+        if (user && !saved && !isReviewMode && saveResult) {
+            saveResult(score, total);
+            setSaved(true);
+        }
+    }, [user]);
+
     return (
         <div className="w-full max-w-3xl mx-auto text-center fade-in pb-10">
             <div className="bg-white dark:bg-slate-800 rounded-3xl p-10 shadow-2xl border border-slate-200 dark:border-slate-700 transition-colors duration-300 mb-8">
                 <div className="w-24 h-24 mx-auto bg-indigo-100 dark:bg-[#10b981]/20 rounded-full flex items-center justify-center mb-6"><span className="text-3xl font-black text-indigo-600 dark:text-[#10b981]">{percentage}%</span></div>
-                <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-2 transition-colors">{percentage > 70 ? "Outstanding!" : "Good Effort!"}</h2>
+                <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-2 transition-colors">{isReviewMode ? "Quiz Review" : (percentage > 70 ? "Outstanding!" : "Good Effort!")}</h2>
                 <p className="text-slate-500 dark:text-slate-400 mb-8">You scored {score} out of {total}</p>
                 <div className="space-y-3 max-w-md mx-auto">
-                    <button onClick={onRetry} className="w-full py-4 bg-indigo-600 dark:bg-[#10b981] text-white dark:text-slate-900 rounded-xl font-bold shadow-lg hover:opacity-90 transition">Create New Quiz</button>
-                    {!user ? (
+                    <button onClick={onRetry} className="w-full py-4 bg-indigo-600 dark:bg-[#10b981] text-white dark:text-slate-900 rounded-xl font-bold shadow-lg hover:opacity-90 transition">{isReviewMode ? "Back to History" : "Create New Quiz"}</button>
+                    {!user && !isReviewMode && (
                         <button onClick={onOpenLogin} className="w-full py-4 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-200 dark:hover:bg-slate-600 transition flex items-center justify-center gap-2">Save My Progress <Icons.ArrowRight /></button>
-                    ) : (<div className="text-xs text-green-500 font-bold uppercase tracking-widest mt-4">✓ Result Saved</div>)}
+                    )}
+                    {user && !isReviewMode && (<div className="text-xs text-green-500 font-bold uppercase tracking-widest mt-4">✓ Result Saved</div>)}
                 </div>
             </div>
             <div className="text-left space-y-6">
                 <h3 className="text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest text-xs text-center mb-6">Detailed Analysis</h3>
                 {quizData.map((q, index) => {
-                    // 1. User Answer is now a LETTER (e.g., "A")
                     const userLabel = userAnswers[index]; 
-                    // 2. Correct Answer is a LETTER (e.g., "A")
                     const correctLabel = q.correctAnswer;
                     const isCorrect = userLabel === correctLabel;
 
                     return (
                         <div key={index} className="bg-white dark:bg-slate-800 rounded-2xl p-6 border border-slate-200 dark:border-slate-700 shadow-sm">
                             <div className="flex items-start gap-4">
-                                <div className={`mt-1 w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-bold text-sm ${isCorrect ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'}`}>
-                                    {isCorrect ? <Icons.Check /> : <Icons.Cross />}
-                                </div>
+                                <div className={`mt-1 w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-bold text-sm ${isCorrect ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'}`}>{isCorrect ? <Icons.Check /> : <Icons.Cross />}</div>
                                 <div className="w-full">
                                     <h4 className="text-lg font-bold text-slate-900 dark:text-white mb-3">{q.question}</h4>
-                                    
-                                    {/* Answer Comparison */}
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                        {/* User Selection */}
                                         <div className={`p-3 rounded-lg text-sm border flex gap-3 items-center ${isCorrect ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-900 text-green-800 dark:text-green-400' : 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-900 text-red-800 dark:text-red-400'}`}>
-                                            <div className="font-bold px-2 py-1 rounded bg-white/50 dark:bg-black/20">{userLabel}</div>
+                                            <div className="font-bold px-2 py-1 rounded bg-white/50 dark:bg-black/20">{userLabel || "-"}</div>
                                             <span className="font-medium opacity-90">Your Answer</span>
                                         </div>
-                                        {/* Correct Answer (if wrong) */}
                                         {!isCorrect && (
                                              <div className="p-3 rounded-lg text-sm bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 flex gap-3 items-center">
                                                 <div className="font-bold px-2 py-1 rounded bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-400">{correctLabel}</div>
@@ -388,7 +431,6 @@ const ResultView = ({ score, total, user, quizData, userAnswers, onRetry, onOpen
                                             </div>
                                         )}
                                     </div>
-
                                     <div className="bg-indigo-50 dark:bg-slate-900/50 p-4 rounded-xl border border-indigo-100 dark:border-slate-700">
                                         <span className="text-[10px] font-bold text-indigo-600 dark:text-[#10b981] uppercase tracking-wider block mb-2">Theory</span>
                                         <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">{q.explanation}</p>
@@ -459,6 +501,20 @@ const App = () => {
         setView('subject-detail');
     };
 
+    const saveQuizResult = async (s, t) => {
+        if (!user) return;
+        try {
+            await db.collection('users').doc(user.uid).collection('history').add({ 
+                topic: currentTopicName || "Unknown", 
+                score: s, 
+                total: t, 
+                date: new Date(),
+                quizData: quizData, 
+                userAnswers: answers 
+            });
+        } catch (err) { console.error("Error saving result:", err); }
+    };
+
     const handleTopicComplete = async (score, total) => {
         if (!user || !activeSubject) return;
         const percentage = Math.round((score/total)*100);
@@ -469,6 +525,15 @@ const App = () => {
              await db.collection('users').doc(user.uid).collection('subjects').doc(activeSubject.id).update({ completed: newCompleted });
              fetchSubjects(user.uid);
         }
+        saveQuizResult(score, total); 
+    };
+
+    const handleSelectHistory = (item) => {
+        if(!item.quizData || !item.userAnswers) return alert("Detailed data not available for this old quiz.");
+        setQuizData(item.quizData);
+        setAnswers(item.userAnswers);
+        setScore(item.score);
+        setView('history-review'); 
     };
 
     useEffect(() => { if (!loading) return; const texts = ["Scanning Knowledge Base...", "Formulating Questions...", "Finalizing Quiz..."]; let i = 0; const interval = setInterval(() => { setProgressText(texts[i % texts.length]); i++; }, 800); return () => clearInterval(interval); }, [loading]);
@@ -490,12 +555,15 @@ const App = () => {
         <div className={theme}>
             <div className="min-h-screen bg-slate-100 dark:bg-[#0f172a] text-slate-900 dark:text-white transition-colors duration-300 font-sans relative flex flex-col">
                 
+                {/* Header */}
                 <div className="px-6 py-4 flex justify-between items-center bg-white dark:bg-slate-900/50 backdrop-blur-md sticky top-0 z-40 border-b border-slate-200 dark:border-slate-700">
                      <div className="flex items-center gap-8">
                         <div className="flex items-center gap-2 font-bold text-xl tracking-tight"><span className="text-indigo-600 dark:text-[#00ffc8]"><Icons.Brain /></span> GenQuiz AI</div>
+                        {/* DESKTOP TABS */}
                         <div className="hidden md:flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
                             <button onClick={() => { setActiveTab('generator'); setView('home'); }} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${activeTab === 'generator' ? 'bg-white dark:bg-[#00ffc8] text-slate-900 shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}>Quick Quiz</button>
                             <button onClick={() => { setActiveTab('subjects'); setView('home'); }} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${activeTab === 'subjects' ? 'bg-white dark:bg-[#00ffc8] text-slate-900 shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}>My Subjects</button>
+                            <button onClick={() => { setActiveTab('history'); setView('home'); }} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${activeTab === 'history' ? 'bg-white dark:bg-[#00ffc8] text-slate-900 shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}>History</button>
                         </div>
                      </div>
                      <div className="flex items-center gap-3">
@@ -511,6 +579,14 @@ const App = () => {
                      </div>
                 </div>
 
+                {/* 🔥 MOBILE TABS (Shown below header on mobile) */}
+                <div className="md:hidden px-4 py-3 bg-white dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-700 sticky top-[73px] z-30 flex gap-2 justify-center shadow-sm">
+                     <button onClick={() => { setActiveTab('generator'); setView('home'); }} className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold transition text-center ${activeTab === 'generator' ? 'bg-indigo-100 dark:bg-[#00ffc8]/10 text-indigo-600 dark:text-[#00ffc8] ring-1 ring-indigo-500 dark:ring-[#00ffc8]' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>Quick Quiz</button>
+                     <button onClick={() => { setActiveTab('subjects'); setView('home'); }} className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold transition text-center ${activeTab === 'subjects' ? 'bg-indigo-100 dark:bg-[#00ffc8]/10 text-indigo-600 dark:text-[#00ffc8] ring-1 ring-indigo-500 dark:ring-[#00ffc8]' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>My Subjects</button>
+                     <button onClick={() => { setActiveTab('history'); setView('home'); }} className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold transition text-center ${activeTab === 'history' ? 'bg-indigo-100 dark:bg-[#00ffc8]/10 text-indigo-600 dark:text-[#00ffc8] ring-1 ring-indigo-500 dark:ring-[#00ffc8]' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>History</button>
+                </div>
+
+                {/* Content */}
                 <div className="flex-1 p-4 md:p-8 flex flex-col items-center">
                     {showAddModal && <AddSubjectModal onClose={() => setShowAddModal(false)} onSave={handleCreateSubject} />}
                     {showLoginModal && <LoginModal onLogin={handleLogin} onClose={() => setShowLoginModal(false)} />}
@@ -518,30 +594,35 @@ const App = () => {
                     {view === 'home' && (
                         activeTab === 'generator' ? (
                             <QuickGenerator onGenerate={generateQuiz} loading={loading} error={error} progressText={progressText} />
-                        ) : (
+                        ) : activeTab === 'subjects' ? (
                             <SubjectDashboard user={user} subjects={subjects} onSelectSubject={handleSelectSubject} onAddSubject={() => setShowAddModal(true)} onOpenLogin={() => setShowLoginModal(true)} />
+                        ) : (
+                            <HistoryDashboard user={user} onOpenLogin={() => setShowLoginModal(true)} onSelectHistory={handleSelectHistory} />
                         )
                     )}
 
                     {view === 'subject-detail' && <SubjectDetail subject={activeSubject} topics={activeTopics} onBack={() => setView('home')} onStartTopic={generateQuiz} />}
                     
-                    {/* 🔥 PASSING STRICT ANSWER LOGIC */}
                     {view === 'quiz' && (
                          <QuizView quizData={quizData} currentQ={currentQ} answers={answers} 
                             onAnswer={(label) => {
                                 const correctLabel = quizData[currentQ].correctAnswer;
-                                setAnswers({...answers, [currentQ]: label}); // Store "A"
-                                if(label === correctLabel) setScore(s => s+1); // Compare "A" === "A"
+                                setAnswers({...answers, [currentQ]: label}); 
+                                if(label === correctLabel) setScore(s => s+1); 
                             }}
                             onNext={() => {
                                 if(currentQ < quizData.length -1) setCurrentQ(c => c+1);
                                 else {
                                     if(user && activeSubject) {
-                                        // Re-calculate correct answers for DB save just to be safe
                                         const finalScore = Object.keys(answers).reduce((acc, qIdx) => {
                                             return acc + (answers[qIdx] === quizData[qIdx].correctAnswer ? 1 : 0);
                                         }, 0);
                                         handleTopicComplete(finalScore, quizData.length);
+                                    } else if(user) {
+                                        const finalScore = Object.keys(answers).reduce((acc, qIdx) => {
+                                            return acc + (answers[qIdx] === quizData[qIdx].correctAnswer ? 1 : 0);
+                                        }, 0);
+                                        saveQuizResult(finalScore, quizData.length);
                                     }
                                     setView('result');
                                 }
@@ -552,8 +633,18 @@ const App = () => {
 
                     {view === 'result' && (
                         <ResultView score={score} total={quizData.length} user={user} quizData={quizData} userAnswers={answers}
-                            onRetry={() => setView(activeSubject ? 'subject-detail' : 'home')}
+                            onRetry={() => setView('home')}
                             onOpenLogin={() => setShowLoginModal(true)}
+                            saveResult={null} 
+                            isReviewMode={false}
+                        />
+                    )}
+
+                    {view === 'history-review' && (
+                        <ResultView score={score} total={quizData.length} user={user} quizData={quizData} userAnswers={answers}
+                            onRetry={() => { setActiveTab('history'); setView('home'); }}
+                            saveResult={null}
+                            isReviewMode={true}
                         />
                     )}
                 </div>
