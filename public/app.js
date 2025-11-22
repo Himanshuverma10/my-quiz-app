@@ -7,13 +7,18 @@ const db = window.db;
 // --- HELPERS ---
 const getLabel = (index) => String.fromCharCode(65 + index);
 const cleanOptionText = (text) => text ? text.replace(/^[A-Da-d0-9]+[\)\.]\s*/, "").trim() : "";
-const isOptionCorrect = (option, correctKey) => {
-    if (!option || !correctKey) return false;
-    const cleanOpt = option.trim();
-    const cleanKey = correctKey.trim();
-    if (cleanOpt === cleanKey) return true;
-    if (cleanOpt.startsWith(cleanKey + ")") || cleanOpt.startsWith(cleanKey + ".")) return true;
-    return false;
+const isOptionCorrect = (o, k) => { if(!o || !k) return false; const cO=o.trim(), cK=k.trim(); return cO===cK || cO.startsWith(cK+")") || cO.startsWith(cK+"."); };
+
+// Date Formatter for History (Instagram Style)
+const formatDateGroup = (dateObj) => {
+    if (!dateObj) return "Recent";
+    const date = dateObj.toDate ? dateObj.toDate() : new Date(dateObj);
+    const today = new Date();
+    const yesterday = new Date(); yesterday.setDate(today.getDate() - 1);
+    
+    if (date.toDateString() === today.toDateString()) return "Today";
+    if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
 // --- ICONS ---
@@ -42,7 +47,8 @@ const Icons = {
     Trophy: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="2"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>,
     User: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
     Shield: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
-    Cpu: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>
+    Cpu: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>,
+    Device: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
 };
 
 // --- 3. MODALS ---
@@ -72,11 +78,16 @@ const ProfileDashboard = ({ user, onUpdateProfile }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [newName, setNewName] = useState(user.displayName);
     const [userData, setUserData] = useState(null);
+    const [activeSessions, setActiveSessions] = useState([]);
 
     useEffect(() => {
         const fetchUserData = async () => {
             const snap = await db.collection('users').doc(user.uid).get();
             setUserData(snap.data());
+            
+            // Fetch Active Sessions
+            const sessionSnap = await db.collection('users').doc(user.uid).collection('sessions').orderBy('lastSeen', 'desc').get();
+            setActiveSessions(sessionSnap.docs.map(doc => doc.data()));
         };
         fetchUserData();
     }, [user]);
@@ -135,24 +146,29 @@ const ProfileDashboard = ({ user, onUpdateProfile }) => {
                 </div>
             </div>
 
-            {/* Security Card */}
+            {/* Security Card (Active Devices) */}
             <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 shadow-lg border border-slate-200 dark:border-slate-700">
-                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2"><Icons.Shield /> Security & Session</h3>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2"><Icons.Shield /> Active Sessions</h3>
                 <div className="space-y-4">
-                    <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900 rounded-xl">
-                        <div>
-                            <p className="text-sm font-bold text-slate-700 dark:text-slate-300">Current Session</p>
-                            <p className="text-xs text-slate-500">Active now on Web</p>
+                    {activeSessions.length > 0 ? activeSessions.map((session, idx) => (
+                        <div key={idx} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900 rounded-xl">
+                            <div className="flex items-center gap-4">
+                                <div className="text-slate-400"><Icons.Device /></div>
+                                <div>
+                                    <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                                        {session.deviceId === localStorage.getItem('did') ? "Current Device" : "Other Device"}
+                                    </p>
+                                    <p className="text-xs text-slate-500 max-w-[200px] truncate">{session.ua}</p>
+                                    <p className="text-[10px] text-slate-400 mt-1">Last seen: {session.lastSeen?.toDate ? formatDateGroup(session.lastSeen) : 'Just now'}</p>
+                                </div>
+                            </div>
+                            {session.deviceId === localStorage.getItem('did') && (
+                                <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_#22c55e]"></div>
+                            )}
                         </div>
-                        <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_#22c55e]"></div>
-                    </div>
-                    <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900 rounded-xl">
-                        <div>
-                            <p className="text-sm font-bold text-slate-700 dark:text-slate-300">Account ID</p>
-                            <p className="text-xs text-slate-500 font-mono">{user.uid}</p>
-                        </div>
-                        <Icons.Lock />
-                    </div>
+                    )) : (
+                        <div className="text-center text-slate-500 text-sm">No active session data found.</div>
+                    )}
                 </div>
             </div>
         </div>
@@ -164,14 +180,18 @@ const QuickGenerator = ({ onGenerate, loading, error, progressText }) => {
     const handleFile = async (e) => { const file = e.target.files?.[0]; if (!file) return; setFileName(file.name); const text = await file.text(); setSourceText(text); };
     return (
         <div className="w-full max-w-5xl mx-auto fade-in">
-            <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-700"><div className="grid grid-cols-1 md:grid-cols-2"><div className="p-8 md:p-10 space-y-8"><h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2"><Icons.Zap /> Quick Quiz</h2><div><label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 block">Select Mode</label><div className="flex gap-4"><button onClick={() => setMode('topic')} className={`flex-1 py-3 rounded-xl font-semibold text-sm border transition-all ${mode === 'topic' ? 'bg-indigo-50 border-indigo-500 text-indigo-700 dark:border-[#10b981] dark:bg-[#10b981]/10 dark:text-[#10b981]' : 'border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400'}`}>Topic</button><button onClick={() => setMode('file')} className={`flex-1 py-3 rounded-xl font-semibold text-sm border transition-all ${mode === 'file' ? 'bg-indigo-50 border-indigo-500 text-indigo-700 dark:border-[#10b981] dark:bg-[#10b981]/10 dark:text-[#10b981]' : 'border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400'}`}>File Upload</button></div></div><div><label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 block">{mode === 'topic' ? 'Enter Topic' : 'Upload Document'}</label>{mode === 'topic' ? (<input value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g. Quantum Mechanics..." className="w-full p-4 bg-slate-50 dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-600 rounded-xl dark:text-white" />) : (<div onClick={() => fileRef.current.click()} className="w-full p-8 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition group"><div className="text-slate-400 dark:text-slate-500 group-hover:text-indigo-500 dark:group-hover:text-[#10b981] mb-2 transition"><Icons.Upload /></div><p className="text-sm font-medium text-slate-600 dark:text-slate-300">{fileName || "Click to Upload PDF/TXT"}</p><input type="file" ref={fileRef} className="hidden" onChange={handleFile} /></div>)}</div><div><label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 block">Difficulty</label><div className="flex gap-2">{['Easy', 'Medium', 'Hard'].map((d) => (<button key={d} onClick={() => setDifficulty(d)} className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-all ${difficulty === d ? 'bg-indigo-600 text-white' : 'border-slate-200 dark:border-slate-600 text-slate-500'}`}>{d}</button>))}</div></div><div><label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Questions: {numQuestions}</label><input type="range" min="3" max="15" value={numQuestions} onChange={(e) => setNumQuestions(parseInt(e.target.value))} /></div><div><button onClick={() => onGenerate({ mode, topic, sourceText, difficulty, numQuestions })} disabled={loading} className="w-full py-4 rounded-xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 flex justify-center items-center gap-2">{loading ? <><Icons.Loader /> Generating...</> : "Generate Quiz"}</button>{loading && <div className="mt-3 text-center"><p className="text-xs text-indigo-600 dark:text-[#10b981] font-mono animate-pulse">{progressText}</p></div>}{error && <p className="text-red-500 text-xs text-center font-medium mt-2">{error}</p>}</div></div><div className="hidden md:flex bg-slate-50 dark:bg-slate-900/50 p-10 flex-col justify-center items-center relative overflow-hidden border-l border-slate-200 dark:border-slate-700"><div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-[0.05] dark:opacity-[0.1]"></div><div className="relative z-10 text-center max-w-xs"><div className="w-20 h-20 bg-indigo-100 dark:bg-indigo-900/20 rounded-full flex items-center justify-center mx-auto mb-6 text-indigo-600 dark:text-indigo-400"><Icons.Brain /></div><h3 className="text-xl font-bold text-slate-800 dark:text-white mb-2">AI-Powered Learning</h3><p className="text-sm text-slate-500 dark:text-slate-400">Generate quizzes instantly.</p></div></div></div></div>
+            <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-700"><div className="grid grid-cols-1 md:grid-cols-2"><div className="p-8 md:p-10 space-y-8"><h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2"><Icons.Zap /> Quick Quiz</h2><div><label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 block">Select Mode</label><div className="flex gap-4"><button onClick={() => setMode('topic')} className={`flex-1 py-3 rounded-xl font-semibold text-sm border transition-all ${mode === 'topic' ? 'bg-indigo-50 border-indigo-500 text-indigo-700 dark:border-[#10b981] dark:bg-[#10b981]/10 dark:text-[#10b981]' : 'border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400'}`}>Topic</button><button onClick={() => setMode('file')} className={`flex-1 py-3 rounded-xl font-semibold text-sm border transition-all ${mode === 'file' ? 'bg-indigo-50 border-indigo-500 text-indigo-700 dark:border-[#10b981] dark:bg-[#10b981]/10 dark:text-[#10b981]' : 'border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400'}`}>File Upload</button></div></div><div><label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 block">{mode === 'topic' ? 'Enter Topic' : 'Upload Document'}</label>{mode === 'topic' ? (<input value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g. Quantum Mechanics..." className="w-full p-4 bg-slate-50 dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-600 rounded-xl dark:text-white" />) : (<div onClick={() => fileRef.current.click()} className="w-full p-8 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition group"><div className="text-slate-400 dark:text-slate-500 group-hover:text-indigo-500 dark:group-hover:text-[#10b981] mb-2 transition"><Icons.Upload /></div><p className="text-sm font-medium text-slate-600 dark:text-slate-300">{fileName || "Click to Upload PDF/TXT"}</p><input type="file" ref={fileRef} className="hidden" onChange={handleFile} /></div>)}</div><div><label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 block">Difficulty</label><div className="flex gap-2">{['Easy', 'Medium', 'Hard'].map((d) => (<button key={d} onClick={() => setDifficulty(d)} className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-all ${difficulty === d ? 'bg-indigo-600 text-white' : 'border-slate-200 dark:border-slate-600 text-slate-500'}`}>{d}</button>))}</div></div><div><label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Questions: {numQuestions}</label><input type="range" min="3" max="15" value={numQuestions} onChange={(e) => setNumQuestions(parseInt(e.target.value))} /></div><div><button onClick={() => onGenerate({ mode, topic, sourceText, difficulty, numQuestions })} disabled={loading} className="w-full py-4 rounded-xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 flex justify-center items-center gap-2">{loading ? <><Icons.Loader /> Generating...</> : "Generate Quiz"}</button>{loading && <div className="mt-3 text-center"><p className="text-xs text-indigo-600 dark:text-[#10b981] font-mono animate-pulse">{progressText}</p></div>}{error && <p className="text-red-500 text-xs text-center font-medium mt-2">{error}</p>}</div></div><div className="hidden md:flex bg-slate-50 dark:bg-slate-900/50 p-10 flex-col justify-center items-center border-l border-slate-200 dark:border-slate-700"><div className="text-center max-w-xs"><div className="w-20 h-20 bg-indigo-100 dark:bg-indigo-900/20 rounded-full flex items-center justify-center mx-auto mb-6 text-indigo-600 dark:text-indigo-400"><Icons.Brain /></div><h3 className="text-xl font-bold text-slate-800 dark:text-white mb-2">AI-Powered Learning</h3><p className="text-sm text-slate-500 dark:text-slate-400">Generate quizzes instantly.</p></div></div></div></div>
         </div>
     );
 };
 
 const SubjectDashboard = ({ user, subjects, onSelectSubject, onAddSubject, onDeleteSubject, onEditSubject, onOpenLogin }) => {
-    if (!user) return (<div className="w-full max-w-2xl mx-auto text-center py-20 fade-in"><div className="w-24 h-24 bg-slate-200 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-6"><Icons.Lock /></div><h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">Dashboard Locked</h1><p className="text-slate-500 dark:text-slate-400 mb-8 max-w-md mx-auto">Please login to manage subjects.</p><button onClick={onOpenLogin} className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg hover:bg-indigo-700 transition">Login to Unlock</button></div>);
-    return ( <div className="w-full max-w-5xl mx-auto fade-in p-4"><div className="flex justify-between items-center mb-8"><h1 className="text-3xl font-bold text-slate-900 dark:text-white">My Subjects</h1><button onClick={onAddSubject} className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold flex items-center gap-2 shadow-lg transition transform hover:scale-105"><Icons.Plus /> Add Subject</button></div>{subjects.length === 0 ? (<div className="text-center py-20 bg-white dark:bg-slate-800 rounded-3xl border border-dashed border-slate-300 dark:border-slate-700"><div className="text-slate-300 mb-4 flex justify-center"><Icons.Book /></div><h3 className="text-lg font-bold text-slate-500 dark:text-slate-400">No subjects yet</h3></div>) : (<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{subjects.map(sub => (<div key={sub.id} className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-md border border-slate-200 dark:border-slate-700 relative group transition hover:border-indigo-500 dark:hover:border-[#10b981]"><div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={(e) => { e.stopPropagation(); onEditSubject(sub); }} className="p-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-500 hover:text-blue-500"><Icons.Edit /></button><button onClick={(e) => { e.stopPropagation(); onDeleteSubject(sub.id); }} className="p-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-500 hover:text-red-500"><Icons.Trash /></button></div><div onClick={() => onSelectSubject(sub)} className="cursor-pointer"><div className="flex justify-between items-start mb-4"><div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl text-indigo-600 dark:text-indigo-400"><Icons.Book /></div></div><h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">{sub.name}</h3><div className="w-full h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden"><div className="h-full bg-indigo-500 dark:bg-[#10b981]" style={{ width: `${(sub.completed / sub.totalTopics) * 100}%` }}></div></div><p className="text-xs text-slate-400 mt-2 text-right">{sub.completed} / {sub.totalTopics} Done</p></div></div>))}</div>)}</div> );
+    if (!user) return (<div className="w-full max-w-2xl mx-auto text-center py-20 fade-in"><div className="w-24 h-24 bg-slate-200 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-6"><Icons.Lock /></div><h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">Dashboard Locked</h1><p className="text-slate-500 dark:text-slate-400 mb-8 max-w-md mx-auto">Please login to manage subjects.</p><button onClick={onOpenLogin} className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg">Login</button></div>);
+
+    return (
+        <div className="w-full max-w-5xl mx-auto fade-in p-4">
+            <div className="flex justify-between items-center mb-8"><h1 className="text-3xl font-bold text-slate-900 dark:text-white">My Subjects</h1><button onClick={onAddSubject} className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold flex items-center gap-2 shadow-lg transition transform hover:scale-105"><Icons.Plus /> Add Subject</button></div>
+            {subjects.length === 0 ? (<div className="text-center py-20 bg-white dark:bg-slate-800 rounded-3xl border border-dashed border-slate-300 dark:border-slate-700"><div className="text-slate-300 mb-4 flex justify-center"><Icons.Book /></div><h3 className="text-lg font-bold text-slate-500 dark:text-slate-400">No subjects yet</h3></div>) : (<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{subjects.map(sub => (<div key={sub.id} className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-md border border-slate-200 dark:border-slate-700 relative group transition hover:border-indigo-500 dark:hover:border-[#10b981]"><div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={(e) => { e.stopPropagation(); onEditSubject(sub); }} className="p-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-500 hover:text-blue-500"><Icons.Edit /></button><button onClick={(e) => { e.stopPropagation(); onDeleteSubject(sub.id); }} className="p-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-500 hover:text-red-500"><Icons.Trash /></button></div><div onClick={() => onSelectSubject(sub)} className="cursor-pointer"><div className="flex justify-between items-start mb-4"><div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl text-indigo-600 dark:text-indigo-400"><Icons.Book /></div></div><h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">{sub.name}</h3><div className="w-full h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden"><div className="h-full bg-indigo-500 dark:bg-[#10b981]" style={{ width: `${(sub.completed / sub.totalTopics) * 100}%` }}></div></div><p className="text-xs text-slate-400 mt-2 text-right">{sub.completed} / {sub.totalTopics} Done</p></div></div>))}</div>)}</div> );
 };
 
 const SubjectDetail = ({ subject, topics, onBack, onStartTopic, onLearnTopic }) => {
@@ -181,11 +201,74 @@ const SubjectDetail = ({ subject, topics, onBack, onStartTopic, onLearnTopic }) 
     return ( <div className="w-full max-w-4xl mx-auto fade-in p-4"><button onClick={() => setSelectedUnit(null)} className="mb-6 text-slate-500 hover:text-indigo-500 flex items-center gap-2 font-bold text-sm"><Icons.ArrowLeft /> Back to Units</button><div className="bg-white dark:bg-slate-800 rounded-3xl p-8 shadow-xl border border-slate-200 dark:border-slate-700 mb-6"><span className="text-xs font-bold text-indigo-500 uppercase tracking-widest mb-2 block">{subject.name}</span><h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">{selectedUnit.name}</h1><p className="text-slate-500 dark:text-slate-400">Select a topic to Learn or Quiz.</p></div><div className="space-y-3">{selectedUnit.topics.map((topic, index) => (<div key={index} className="flex flex-col md:flex-row md:items-center justify-between p-5 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-indigo-400 transition gap-4"><div className="flex items-center gap-4"><span className="text-slate-300 font-mono font-bold text-sm">{(index + 1).toString().padStart(2, '0')}</span><h4 className={`font-bold text-lg ${topic.completed && topic.learned ? 'text-yellow-600 dark:text-yellow-500' : 'text-slate-800 dark:text-slate-200'}`}>{topic.name}</h4></div><div className="flex gap-2 w-full md:w-auto"><button onClick={() => onLearnTopic(topic.name, subject.name, topic.id)} className={`flex-1 md:flex-none px-4 py-2 rounded-lg font-bold text-sm transition flex items-center justify-center gap-2 ${topic.learned ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400 hover:bg-indigo-100'}`}>{topic.learned && <Icons.Check />} Learn</button><button onClick={() => onStartTopic(topic.name)} className={`flex-1 md:flex-none px-4 py-2 rounded-lg font-bold text-sm transition flex items-center justify-center gap-2 ${topic.completed ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}>{topic.completed ? <><Icons.CheckCircle /> {topic.score}%</> : <><Icons.Play /> Quiz</>}</button></div></div>))}</div></div> );
 };
 
+// --- 🔥 UPDATED HISTORY DASHBOARD (Grouped by Date) ---
 const HistoryDashboard = ({ user, onOpenLogin, onSelectHistory }) => {
-    const [history, setHistory] = useState([]); const [loading, setLoading] = useState(true);
-    useEffect(() => { if (!user) return; const fetchHistory = async () => { const snap = await db.collection('users').doc(user.uid).collection('history').orderBy('date', 'desc').get(); setHistory(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))); setLoading(false); }; fetchHistory(); }, [user]);
-    if (!user) return ( <div className="w-full max-w-2xl mx-auto text-center py-20 fade-in"><div className="w-24 h-24 bg-slate-200 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-6"><Icons.Lock /></div><h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">History Locked</h1><button onClick={onOpenLogin} className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg">Login</button></div> );
-    return ( <div className="w-full max-w-4xl mx-auto fade-in p-4"><h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">Quiz History</h1>{loading ? <div className="text-center p-10"><Icons.Loader /></div> : history.length === 0 ? <div className="text-center py-20 bg-white dark:bg-slate-800 rounded-3xl border border-dashed border-slate-300 dark:border-slate-700"><h3 className="text-lg font-bold text-slate-500">No quizzes yet</h3></div> : <div className="space-y-4">{history.map((item) => (<div key={item.id} className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex justify-between items-center hover:border-indigo-500 dark:hover:border-[#10b981] transition"><div><h3 className="font-bold text-slate-900 dark:text-white mb-1">{item.topic}</h3><p className="text-xs text-slate-500">{item.date?.toDate ? item.date.toDate().toLocaleDateString() : 'Just now'} • Score: {item.score}/{item.total}</p></div><button onClick={() => onSelectHistory(item)} className="px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg text-sm font-bold">Review</button></div>))}</div>}</div> );
+    const [history, setHistory] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        if (!user) return;
+        const fetchHistory = async () => {
+            // Get both Quizzes and Learning events
+            const snap = await db.collection('users').doc(user.uid).collection('history').orderBy('date', 'desc').get();
+            setHistory(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            setLoading(false);
+        };
+        fetchHistory();
+    }, [user]);
+
+    if (!user) return (<div className="w-full max-w-2xl mx-auto text-center py-20 fade-in"><div className="w-24 h-24 bg-slate-200 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-6"><Icons.Lock /></div><h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">History Locked</h1><p className="text-slate-500 dark:text-slate-400 mb-8">Login required.</p><button onClick={onOpenLogin} className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg">Login</button></div>);
+
+    // Group History by Date
+    const groupedHistory = useMemo(() => {
+        const groups = {};
+        history.forEach(item => {
+            const dateKey = formatDateGroup(item.date);
+            if (!groups[dateKey]) groups[dateKey] = [];
+            groups[dateKey].push(item);
+        });
+        return groups;
+    }, [history]);
+
+    return (
+        <div className="w-full max-w-4xl mx-auto fade-in p-4">
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">Activity History</h1>
+            {loading ? <div className="text-center p-10"><Icons.Loader /></div> : history.length === 0 ? (
+                <div className="text-center py-20 bg-white dark:bg-slate-800 rounded-3xl border border-dashed border-slate-300 dark:border-slate-700">
+                    <div className="text-slate-300 mb-4 flex justify-center"><Icons.Clock /></div>
+                    <h3 className="text-lg font-bold text-slate-500 dark:text-slate-400">No activity yet</h3>
+                </div>
+            ) : (
+                <div className="space-y-8">
+                    {Object.entries(groupedHistory).map(([dateLabel, items]) => (
+                        <div key={dateLabel}>
+                            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">{dateLabel}</h2>
+                            <div className="space-y-3">
+                                {items.map((item) => (
+                                    <div key={item.id} className="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex justify-between items-center hover:border-indigo-500 dark:hover:border-[#10b981] transition">
+                                        <div className="flex items-center gap-4">
+                                            <div className={`p-3 rounded-xl ${item.type === 'learn' ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-500' : 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-500'}`}>
+                                                {item.type === 'learn' ? <Icons.Book /> : <Icons.Brain />}
+                                            </div>
+                                            <div>
+                                                <h3 className="font-bold text-slate-900 dark:text-white text-sm">{item.topic}</h3>
+                                                <p className="text-xs text-slate-500 dark:text-slate-400">
+                                                    {item.type === 'learn' ? 'Learned Concept' : `Quiz Score: ${item.score}/${item.total}`}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        {item.type !== 'learn' && (
+                                            <button onClick={() => onSelectHistory(item)} className="px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg text-xs font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/30 hover:text-indigo-600 transition">Review</button>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
 };
 
 const LearnDashboard = ({ user, subjects, initialData, onStartTest, onOpenLogin }) => {
@@ -199,6 +282,7 @@ const LearnDashboard = ({ user, subjects, initialData, onStartTest, onOpenLogin 
     return ( <div className="w-full max-w-4xl mx-auto fade-in p-4">{!lesson ? ( <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 md:p-12 shadow-2xl border border-slate-200 dark:border-slate-700"><div className="text-center mb-8"><div className="w-16 h-16 bg-indigo-100 dark:bg-indigo-900/20 rounded-2xl flex items-center justify-center mx-auto mb-4 text-indigo-600 dark:text-indigo-400"><Icons.Lightbulb /></div><h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Start Learning</h1></div><div className="space-y-6 max-w-lg mx-auto"><div className="flex gap-4 mb-6"><button onClick={() => setMode('topic')} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all border ${mode === 'topic' ? 'bg-indigo-50 border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-slate-200 dark:border-slate-700'}`}>By Topic</button><button onClick={() => setMode('file')} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all border ${mode === 'file' ? 'bg-indigo-50 border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-slate-200 dark:border-slate-700'}`}>From File</button></div>{mode === 'topic' ? ( <> {subjects.length > 0 && <div><label className="block text-xs font-bold text-slate-400 uppercase mb-2">Context</label><select value={selectedSubject} onChange={handleSubjectChange} className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700"><option value="">General</option>{subjects.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}</select></div>} {availableUnits.length > 0 && <div><label className="block text-xs font-bold text-slate-400 uppercase mb-2">Unit</label><select value={selectedUnit} onChange={handleUnitChange} className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700"><option value="">-- Select Unit --</option>{availableUnits.map((u, i) => <option key={i} value={u}>{u}</option>)}</select></div>} <div><label className="block text-xs font-bold text-slate-400 uppercase mb-2">Topic</label>{selectedSubject && (filteredTopics.length > 0 || availableUnits.length > 0) ? ( isFetchingTopics ? <div className="text-sm"><Icons.Loader /> Loading...</div> : <select value={topic} onChange={e => setTopic(e.target.value)} disabled={availableUnits.length > 0 && !selectedUnit} className="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700"><option value="">-- Select Topic --</option>{filteredTopics.map((t, i) => <option key={i} value={t}>{t}</option>)}</select> ) : <input value={topic} onChange={e => setTopic(e.target.value)} placeholder="e.g. Laws..." className="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700" />}</div> </> ) : ( <> <div onClick={() => fileRef.current.click()} className="w-full p-4 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition mb-4"><Icons.Upload /><p className="text-sm">{fileName || "Upload"}</p><input type="file" ref={fileRef} className="hidden" onChange={handleFile} /></div><textarea value={sourceText} onChange={e => setSourceText(e.target.value)} className="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 h-32" placeholder="Paste..." /> </> )}<button onClick={handleGenerateLesson} disabled={loading} className="w-full py-4 rounded-xl bg-indigo-600 text-white font-bold shadow-lg hover:bg-indigo-700 flex justify-center items-center gap-2">{loading ? <><Icons.Loader /> Generating...</> : "Start Learning"}</button></div></div> ) : ( <div className="fade-in"><button onClick={() => setLesson(null)} className="mb-6 text-slate-500 hover:text-indigo-500 flex items-center gap-2 font-bold text-sm"><Icons.ArrowLeft /> Back</button><div className="bg-white dark:bg-slate-800 rounded-3xl p-8 md:p-12 shadow-xl border border-slate-200 dark:border-slate-700 mb-8 prose dark:prose-invert max-w-none whitespace-pre-wrap"><div dangerouslySetInnerHTML={{ __html: lesson.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br/>') }} /></div><div className="text-center"><button onClick={() => onStartTest(lesson)} className="px-8 py-4 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold shadow-lg transition flex items-center gap-2 mx-auto"><Icons.Brain /> Generate Quiz</button></div></div> )}</div> );
 };
 
+// --- QUIZ & RESULT VIEW (Same as before) ---
 const QuizView = ({ quizData, currentQ, answers, onAnswer, onNext, onQuit }) => {
     const q = quizData[currentQ]; const answered = answers[currentQ]; const progress = ((currentQ + 1) / quizData.length) * 100;
     return (
@@ -235,9 +319,20 @@ const ResultView = ({ score, total, user, quizData, userAnswers, onRetry, onOpen
 const App = () => {
     const [user, setUser] = useState(null); const [theme, setTheme] = useState('dark'); const [activeTab, setActiveTab] = useState('generator'); const [view, setView] = useState('home');
     const [subjects, setSubjects] = useState([]); const [activeSubject, setActiveSubject] = useState(null); const [activeTopics, setActiveTopics] = useState([]); const [showAddModal, setShowAddModal] = useState(false); const [showEditModal, setShowEditModal] = useState(false); const [editingSubject, setEditingSubject] = useState(null); const [showLoginModal, setShowLoginModal] = useState(false); const [learnInitData, setLearnInitData] = useState(null);
+
     const [quizData, setQuizData] = useState([]); const [currentQ, setCurrentQ] = useState(0); const [score, setScore] = useState(0); const [answers, setAnswers] = useState({}); const [loading, setLoading] = useState(false); const [error, setError] = useState(''); const [progressText, setProgressText] = useState(''); const [currentTopicName, setCurrentTopicName] = useState('');
     
-    useEffect(() => { if(!auth) return; auth.onAuthStateChanged((u) => { setUser(u); if(u) { setShowLoginModal(false); fetchSubjects(u.uid); } }); }, []);
+    useEffect(() => { if(!auth) return; auth.onAuthStateChanged((u) => { setUser(u); if(u) { setShowLoginModal(false); fetchSubjects(u.uid); trackSession(u.uid); } }); }, []);
+    
+    // 🔥 SESSION TRACKER
+    const trackSession = async (uid) => {
+        let deviceId = localStorage.getItem('did');
+        if (!deviceId) { deviceId = Math.random().toString(36).substring(2); localStorage.setItem('did', deviceId); }
+        await db.collection('users').doc(uid).collection('sessions').doc(deviceId).set({
+            deviceId, ua: navigator.userAgent, lastSeen: new Date()
+        }, { merge: true });
+    };
+
     const toggleTheme = () => setTheme(prev => prev === 'dark' ? 'light' : 'dark'); const handleLogin = async () => { const provider = new firebase.auth.GoogleAuthProvider(); try { await auth.signInWithPopup(provider); } catch (e) { alert(e.message); } }; const handleLogout = () => { auth.signOut(); setSubjects([]); setActiveTab('generator'); };
     
     const fetchSubjects = async (uid) => { const snap = await db.collection('users').doc(uid).collection('subjects').get(); setSubjects(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))); };
@@ -245,18 +340,29 @@ const App = () => {
     const handleDeleteSubject = async (id) => { if(!confirm("Delete subject?")) return; await db.collection('users').doc(user.uid).collection('subjects').doc(id).delete(); fetchSubjects(user.uid); };
     const handleSelectSubject = async (sub) => { setActiveSubject(sub); const snap = await db.collection('users').doc(user.uid).collection('subjects').doc(sub.id).collection('topics').get(); setActiveTopics(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))); setView('subject-detail'); };
     
-    const saveQuizResult = async (s, t) => { if (!user) return; try { await db.collection('users').doc(user.uid).collection('history').add({ topic: currentTopicName || "Unknown", score: s, total: t, date: new Date(), quizData: quizData, userAnswers: answers }); 
-    // Also update tokens & stats
+    const saveQuizResult = async (s, t) => { if (!user) return; try { await db.collection('users').doc(user.uid).collection('history').add({ topic: currentTopicName || "Unknown", score: s, total: t, date: new Date(), type: 'quiz', quizData: quizData, userAnswers: answers }); 
     const tokenUsage = quizData.usage || { totalTokenCount: 0 };
-    await db.collection('users').doc(user.uid).set({
-        tokenUsage: firebase.firestore.FieldValue.increment(tokenUsage.totalTokenCount || 0),
-        stats: { totalQuizzes: firebase.firestore.FieldValue.increment(1), avgScore: 0 } 
-    }, { merge: true });
+    await db.collection('users').doc(user.uid).set({ tokenUsage: firebase.firestore.FieldValue.increment(tokenUsage.totalTokenCount || 0), stats: { totalQuizzes: firebase.firestore.FieldValue.increment(1), avgScore: 0 } }, { merge: true });
     } catch (err) { console.error(err); } };
     
     const handleTopicComplete = async (score, total) => { if (!user || !activeSubject) return; const percentage = Math.round((score/total)*100); const topicObj = activeTopics.find(t => t.name === currentTopicName); if(topicObj) { await db.collection('users').doc(user.uid).collection('subjects').doc(activeSubject.id).collection('topics').doc(topicObj.id).update({ completed: true, score: percentage }); const newCompleted = activeSubject.completed + (topicObj.completed ? 0 : 1); await db.collection('users').doc(user.uid).collection('subjects').doc(activeSubject.id).update({ completed: newCompleted }); fetchSubjects(user.uid); } saveQuizResult(score, total); };
     const handleSelectHistory = (item) => { if(!item.quizData) return alert("No data."); setQuizData(item.quizData); setAnswers(item.userAnswers); setScore(item.score); setView('history-review'); };
-    const handleLearnTopic = async (topicName, subjectName, topicId) => { if(topicId && activeSubject) { await db.collection('users').doc(user.uid).collection('subjects').doc(activeSubject.id).collection('topics').doc(topicId).update({ learned: true }); setActiveTopics(prev => prev.map(t => t.id === topicId ? { ...t, learned: true } : t)); } setLearnInitData({ topic: topicName, subject: subjectName }); setActiveTab('learn'); setView('home'); };
+    
+    // 🔥 Handle DB Update for Learning
+    const handleLearnTopic = async (topicName, subjectName, topicId) => {
+        // Add History Entry
+        if(user) {
+             await db.collection('users').doc(user.uid).collection('history').add({ type: 'learn', topic: topicName, subject: subjectName, date: new Date() });
+        }
+        // Update Topic Status
+        if(topicId && activeSubject) {
+            await db.collection('users').doc(user.uid).collection('subjects').doc(activeSubject.id).collection('topics').doc(topicId).update({ learned: true });
+            setActiveTopics(prev => prev.map(t => t.id === topicId ? { ...t, learned: true } : t));
+        }
+        setLearnInitData({ topic: topicName, subject: subjectName });
+        setActiveTab('learn'); setView('home');
+    };
+
     useEffect(() => { if (!loading) return; const texts = ["Scanning...", "Drafting...", "Ready..."]; let i = 0; const interval = setInterval(() => { setProgressText(texts[i % texts.length]); i++; }, 800); return () => clearInterval(interval); }, [loading]);
     const generateQuiz = async ({ mode, topic, sourceText, difficulty, numQuestions }) => { setLoading(true); setError(''); setCurrentTopicName(mode === 'topic' ? topic : "File"); try { const response = await fetch('/api/generate-quiz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ topic: mode === 'topic' ? topic : "File", sourceText: mode === 'file' ? sourceText : null, difficulty, numQuestions }) }); const data = await response.json(); if (data.error) throw new Error(data.error); const qData = data.quiz; qData.usage = data.usage; setQuizData(qData); setCurrentQ(0); setScore(0); setAnswers({}); setView('quiz'); } catch (err) { setError(err.message); } finally { setLoading(false); } };
 
@@ -267,7 +373,7 @@ const App = () => {
                      <div className="flex items-center gap-8"><div className="flex items-center gap-2 font-bold text-xl tracking-tight"><span className="text-indigo-600 dark:text-[#00ffc8]"><Icons.Brain /></span> GenQuiz AI</div><div className="hidden md:flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl"><button onClick={() => { setActiveTab('generator'); setView('home'); }} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${activeTab === 'generator' ? 'bg-white dark:bg-[#00ffc8] text-slate-900 shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}>Quick Quiz</button><button onClick={() => { setActiveTab('subjects'); setView('home'); }} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${activeTab === 'subjects' ? 'bg-white dark:bg-[#00ffc8] text-slate-900 shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}>My Subjects</button><button onClick={() => { setActiveTab('history'); setView('home'); }} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${activeTab === 'history' ? 'bg-white dark:bg-[#00ffc8] text-slate-900 shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}>History</button><button onClick={() => { setActiveTab('learn'); setView('home'); }} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${activeTab === 'learn' ? 'bg-white dark:bg-[#00ffc8] text-slate-900 shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}>Learn</button></div></div>
                      <div className="flex items-center gap-3"><button onClick={toggleTheme} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition">{theme === 'dark' ? <Icons.Sun /> : <Icons.Moon />}</button>{user ? (<div className="flex items-center gap-3 pl-4 border-l border-slate-200 dark:border-slate-700"><button onClick={() => { setActiveTab('profile'); setView('home'); }} className="flex items-center gap-2 hover:opacity-80 transition"><img src={user.photoURL} className="w-8 h-8 rounded-full border border-slate-300 dark:border-slate-600" /></button><button onClick={handleLogout} className="text-xs font-bold text-red-500 hover:text-red-600">Logout</button></div>) : (<button onClick={() => setShowLoginModal(true)} className="text-sm font-bold text-indigo-600 dark:text-[#00ffc8] hover:underline">Login</button>)}</div>
                 </div>
-                <div className="md:hidden px-4 py-3 bg-white dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-700 sticky top-[73px] z-30 flex gap-2 justify-center shadow-sm overflow-x-auto"><button onClick={() => { setActiveTab('generator'); setView('home'); }} className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-bold transition text-center ${activeTab === 'generator' ? 'bg-indigo-100 dark:bg-[#00ffc8]/10 text-indigo-600 dark:text-[#00ffc8] ring-1 ring-indigo-500 dark:ring-[#00ffc8]' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>Quick Quiz</button><button onClick={() => { setActiveTab('subjects'); setView('home'); }} className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-bold transition text-center ${activeTab === 'subjects' ? 'bg-indigo-100 dark:bg-[#00ffc8]/10 text-indigo-600 dark:text-[#00ffc8] ring-1 ring-indigo-500 dark:ring-[#00ffc8]' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>Subjects</button><button onClick={() => { setActiveTab('history'); setView('home'); }} className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-bold transition text-center ${activeTab === 'history' ? 'bg-indigo-100 dark:bg-[#00ffc8]/10 text-indigo-600 dark:text-[#00ffc8] ring-1 ring-indigo-500 dark:ring-[#00ffc8]' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>History</button><button onClick={() => { setActiveTab('learn'); setView('home'); }} className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-bold transition text-center ${activeTab === 'learn' ? 'bg-indigo-100 dark:bg-[#00ffc8]/10 text-indigo-600 dark:text-[#00ffc8] ring-1 ring-indigo-500 dark:ring-[#00ffc8]' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>Learn</button></div>
+                <div className="md:hidden px-4 py-3 bg-white dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-700 sticky top-[73px] z-30 flex gap-2 justify-center shadow-sm overflow-x-auto"><button onClick={() => { setActiveTab('generator'); setView('home'); }} className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-bold transition text-center ${activeTab === 'generator' ? 'bg-indigo-100 dark:bg-[#00ffc8]/10 text-indigo-600 dark:text-[#00ffc8] ring-1 ring-indigo-500 dark:ring-[#00ffc8]' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>Quick Quiz</button><button onClick={() => { setActiveTab('subjects'); setView('home'); }} className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-bold transition text-center ${activeTab === 'subjects' ? 'bg-indigo-100 dark:bg-[#00ffc8]/10 text-indigo-600 dark:text-[#00ffc8] ring-1 ring-indigo-500 dark:ring-[#00ffc8]' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>Subjects</button><button onClick={() => { setActiveTab('history'); setView('home'); }} className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-bold transition text-center ${activeTab === 'history' ? 'bg-indigo-100 dark:bg-[#00ffc8]/10 text-indigo-600 dark:text-[#00ffc8] ring-1 ring-indigo-500 dark:ring-[#00ffc8]' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>History</button><button onClick={() => { setActiveTab('learn'); setView('home'); }} className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-bold transition text-center ${activeTab === 'learn' ? 'bg-indigo-100 dark:bg-[#00ffc8]/10 text-indigo-600 dark:text-[#00ffc8] ring-1 ring-indigo-500 dark:ring-[#00ffc8]' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>Learn</button><button onClick={() => { setActiveTab('profile'); setView('home'); }} className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-bold transition text-center ${activeTab === 'profile' ? 'bg-indigo-100 dark:bg-[#00ffc8]/10 text-indigo-600 dark:text-[#00ffc8] ring-1 ring-indigo-500 dark:ring-[#00ffc8]' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>Profile</button></div>
                 <div className="flex-1 p-4 md:p-8 flex flex-col items-center">
                     {showAddModal && <AddSubjectModal onClose={() => setShowAddModal(false)} onSave={handleCreateSubject} />}
                     {showEditModal && <EditSubjectModal user={user} subject={editingSubject} onClose={() => setShowEditModal(false)} onUpdate={() => fetchSubjects(user.uid)} />}
