@@ -334,18 +334,43 @@ const HistoryDashboard = ({ user, onOpenLogin, onSelectHistory }) => {
     );
 };
 
-// --- 🔥 TAB 4: UPDATED LEARN DASHBOARD ---
+// --- 🔥 TAB 4: UPDATED LEARN DASHBOARD (With Auto-Fetch Topics) ---
 const LearnDashboard = ({ user, subjects, onStartTest, onOpenLogin }) => {
-    const [mode, setMode] = useState('topic'); // 'topic' or 'file'
+    const [mode, setMode] = useState('topic');
     const [topic, setTopic] = useState('');
     const [selectedSubject, setSelectedSubject] = useState('');
+    const [availableTopics, setAvailableTopics] = useState([]); // New State for Topics
+    const [isFetchingTopics, setIsFetchingTopics] = useState(false);
     const [lesson, setLesson] = useState(null);
     const [loading, setLoading] = useState(false);
     const [fileName, setFileName] = useState('');
     const [sourceText, setSourceText] = useState('');
     const fileRef = useRef(null);
 
-    // Handle File Upload for Learn Mode
+    // Handle Subject Change & Fetch Topics
+    const handleSubjectChange = async (e) => {
+        const subName = e.target.value;
+        setSelectedSubject(subName);
+        setTopic(''); // Reset topic
+        setAvailableTopics([]); // Clear old topics
+
+        if (!subName) return;
+
+        // Find the subject object to get its ID
+        const subObj = subjects.find(s => s.name === subName);
+        if (subObj) {
+            setIsFetchingTopics(true);
+            try {
+                const snap = await db.collection('users').doc(user.uid)
+                    .collection('subjects').doc(subObj.id)
+                    .collection('topics').get();
+                const fetchedTopics = snap.docs.map(doc => doc.data().name);
+                setAvailableTopics(fetchedTopics);
+            } catch (err) { console.error("Error fetching topics:", err); }
+            setIsFetchingTopics(false);
+        }
+    };
+
     const handleFile = async (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -389,7 +414,6 @@ const LearnDashboard = ({ user, subjects, onStartTest, onOpenLogin }) => {
         } catch (e) { alert(e.message); } finally { setLoading(false); }
     };
 
-    // 🔒 Guest Lock Logic
     if (!user) {
         return (
             <div className="w-full max-w-2xl mx-auto text-center py-20 fade-in">
@@ -412,7 +436,6 @@ const LearnDashboard = ({ user, subjects, onStartTest, onOpenLogin }) => {
                     </div>
 
                     <div className="space-y-6 max-w-lg mx-auto">
-                        {/* Mode Selector */}
                         <div className="flex gap-4 mb-6">
                             <button onClick={() => setMode('topic')} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all border ${mode === 'topic' ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400'}`}>By Topic</button>
                             <button onClick={() => setMode('file')} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all border ${mode === 'file' ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400'}`}>From File/Text</button>
@@ -422,16 +445,30 @@ const LearnDashboard = ({ user, subjects, onStartTest, onOpenLogin }) => {
                             <>
                                 {subjects.length > 0 && (
                                     <div>
-                                        <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Subject Context (Optional)</label>
-                                        <select value={selectedSubject} onChange={e => setSelectedSubject(e.target.value)} className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:outline-none focus:border-indigo-500">
+                                        <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Subject Context</label>
+                                        <select value={selectedSubject} onChange={handleSubjectChange} className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:outline-none focus:border-indigo-500">
                                             <option value="">General Topic</option>
                                             {subjects.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
                                         </select>
                                     </div>
                                 )}
                                 <div>
-                                    <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Topic Name</label>
-                                    <input value={topic} onChange={e => setTopic(e.target.value)} placeholder="e.g. Newton's Laws..." className="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:outline-none focus:border-indigo-500" />
+                                    <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
+                                        {selectedSubject && availableTopics.length > 0 ? "Select Unit/Topic" : "Topic Name"}
+                                    </label>
+                                    
+                                    {selectedSubject && availableTopics.length > 0 ? (
+                                        isFetchingTopics ? (
+                                            <div className="p-3 text-slate-500 text-sm"><Icons.Loader /> Loading topics...</div>
+                                        ) : (
+                                            <select value={topic} onChange={e => setTopic(e.target.value)} className="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:outline-none focus:border-indigo-500 text-lg">
+                                                <option value="">-- Select Topic --</option>
+                                                {availableTopics.map((t, i) => <option key={i} value={t}>{t}</option>)}
+                                            </select>
+                                        )
+                                    ) : (
+                                        <input value={topic} onChange={e => setTopic(e.target.value)} placeholder="e.g. Newton's Laws..." className="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:outline-none focus:border-indigo-500 text-lg" />
+                                    )}
                                 </div>
                             </>
                         ) : (
@@ -695,9 +732,11 @@ const App = () => {
         <div className={theme}>
             <div className="min-h-screen bg-slate-100 dark:bg-[#0f172a] text-slate-900 dark:text-white transition-colors duration-300 font-sans relative flex flex-col">
                 
+                {/* Header */}
                 <div className="px-6 py-4 flex justify-between items-center bg-white dark:bg-slate-900/50 backdrop-blur-md sticky top-0 z-40 border-b border-slate-200 dark:border-slate-700">
                      <div className="flex items-center gap-8">
                         <div className="flex items-center gap-2 font-bold text-xl tracking-tight"><span className="text-indigo-600 dark:text-[#00ffc8]"><Icons.Brain /></span> GenQuiz AI</div>
+                        {/* DESKTOP TABS */}
                         <div className="hidden md:flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
                             <button onClick={() => { setActiveTab('generator'); setView('home'); }} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${activeTab === 'generator' ? 'bg-white dark:bg-[#00ffc8] text-slate-900 shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}>Quick Quiz</button>
                             <button onClick={() => { setActiveTab('subjects'); setView('home'); }} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${activeTab === 'subjects' ? 'bg-white dark:bg-[#00ffc8] text-slate-900 shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}>My Subjects</button>
@@ -718,6 +757,7 @@ const App = () => {
                      </div>
                 </div>
 
+                {/* MOBILE TABS */}
                 <div className="md:hidden px-4 py-3 bg-white dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-700 sticky top-[73px] z-30 flex gap-2 justify-center shadow-sm overflow-x-auto">
                      <button onClick={() => { setActiveTab('generator'); setView('home'); }} className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-bold transition text-center ${activeTab === 'generator' ? 'bg-indigo-100 dark:bg-[#00ffc8]/10 text-indigo-600 dark:text-[#00ffc8] ring-1 ring-indigo-500 dark:ring-[#00ffc8]' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>Quick Quiz</button>
                      <button onClick={() => { setActiveTab('subjects'); setView('home'); }} className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-bold transition text-center ${activeTab === 'subjects' ? 'bg-indigo-100 dark:bg-[#00ffc8]/10 text-indigo-600 dark:text-[#00ffc8] ring-1 ring-indigo-500 dark:ring-[#00ffc8]' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>Subjects</button>
@@ -725,6 +765,7 @@ const App = () => {
                      <button onClick={() => { setActiveTab('learn'); setView('home'); }} className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-bold transition text-center ${activeTab === 'learn' ? 'bg-indigo-100 dark:bg-[#00ffc8]/10 text-indigo-600 dark:text-[#00ffc8] ring-1 ring-indigo-500 dark:ring-[#00ffc8]' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>Learn</button>
                 </div>
 
+                {/* Content */}
                 <div className="flex-1 p-4 md:p-8 flex flex-col items-center">
                     {showAddModal && <AddSubjectModal onClose={() => setShowAddModal(false)} onSave={handleCreateSubject} />}
                     {showLoginModal && <LoginModal onLogin={handleLogin} onClose={() => setShowLoginModal(false)} />}
