@@ -1072,10 +1072,31 @@ const App = () => {
         fetchSubjects(user.uid);
     };
 
-    const handleDeleteSubject = async (id) => {
-        if(!confirm("Are you sure you want to delete this subject? All progress will be lost.")) return;
-        await db.collection('users').doc(user.uid).collection('subjects').doc(id).delete();
-        fetchSubjects(user.uid);
+const handleDeleteSubject = async (id) => {
+        if(!confirm("Are you sure you want to delete this subject? All topics and progress will be lost.")) return;
+        
+        try {
+            // 1. Pehle saare TOPICS delete karo (Batch delete)
+            const topicsRef = db.collection('users').doc(user.uid).collection('subjects').doc(id).collection('topics');
+            const snapshot = await topicsRef.get();
+            
+            if (!snapshot.empty) {
+                const batch = db.batch();
+                snapshot.docs.forEach((doc) => {
+                    batch.delete(doc.ref);
+                });
+                await batch.commit();
+            }
+
+            // 2. Ab SUBJECT delete karo
+            await db.collection('users').doc(user.uid).collection('subjects').doc(id).delete();
+            
+            // 3. Refresh list
+            fetchSubjects(user.uid);
+        } catch (err) {
+            console.error("Error deleting subject:", err);
+            alert("Error removing subject.");
+        }
     };
 
     const handleSelectSubject = async (sub) => {
