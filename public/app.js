@@ -6,19 +6,11 @@ const db = window.db;
 
 // --- HELPERS ---
 const getLabel = (index) => String.fromCharCode(65 + index);
-
-const cleanOptionText = (text) => {
-    if(!text) return "";
-    // Removes "A)", "1.", etc from start of text
-    return text.replace(/^[A-Da-d0-9]+[\)\.]\s*/, "").trim();
-};
-
-// Check Answer Logic (Strict Match)
+const cleanOptionText = (text) => text ? text.replace(/^[A-Da-d0-9]+[\)\.]\s*/, "").trim() : "";
 const isOptionCorrect = (option, correctKey) => {
     if (!option || !correctKey) return false;
     const cleanOpt = option.trim();
     const cleanKey = correctKey.trim();
-    // Direct Match or Prefix Match
     if (cleanOpt === cleanKey) return true;
     if (cleanOpt.startsWith(cleanKey + ")") || cleanOpt.startsWith(cleanKey + ".")) return true;
     return false;
@@ -44,10 +36,129 @@ const Icons = {
     ArrowLeft: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>,
     Zap: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>,
     Clock: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
-    Lightbulb: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 12 3 4.65 4.65 0 0 0 7.5 11.5c0 1.16.52 2.17 1.41 2.5"/></svg>
+    Lightbulb: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 12 3 4.65 4.65 0 0 0 7.5 11.5c0 1.16.52 2.17 1.41 2.5"/></svg>,
+    Edit: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>,
+    Trash: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
 };
 
-// --- ADD SUBJECT MODAL (Syllabus Parser) ---
+// --- 🔥 NEW: EDIT SUBJECT MODAL ---
+const EditSubjectModal = ({ user, subject, onClose, onUpdate }) => {
+    const [name, setName] = useState(subject.name);
+    const [syllabus, setSyllabus] = useState('');
+    const [parsing, setParsing] = useState(false);
+    const [topics, setTopics] = useState([]); // Existing topics
+    const [loadingTopics, setLoadingTopics] = useState(true);
+    const fileRef = useRef(null);
+
+    // Fetch existing topics on mount
+    useEffect(() => {
+        const fetchTopics = async () => {
+            const snap = await db.collection('users').doc(user.uid).collection('subjects').doc(subject.id).collection('topics').get();
+            setTopics(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            setLoadingTopics(false);
+        };
+        fetchTopics();
+    }, [subject]);
+
+    // Handle Delete Topic (From DB)
+    const handleDeleteTopic = async (topicId) => {
+        if(!confirm("Delete this topic?")) return;
+        await db.collection('users').doc(user.uid).collection('subjects').doc(subject.id).collection('topics').doc(topicId).delete();
+        setTopics(prev => prev.filter(t => t.id !== topicId)); // Optimistic update
+        // Note: Ideally update 'totalTopics' count on parent, but okay for now.
+    };
+
+    const handleFile = async (e) => {
+        const file = e.target.files?.[0]; if (!file) return;
+        setParsing(true);
+        try {
+            let text = "";
+            if (file.type === 'application/pdf') {
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                const maxPages = Math.min(pdf.numPages, 15); 
+                for (let i = 1; i <= maxPages; i++) { const page = await pdf.getPage(i); const textContent = await page.getTextContent(); text += textContent.items.map(item => item.str).join(' ') + "\n"; }
+            } else { text = await file.text(); }
+            setSyllabus(text); 
+        } catch (err) { alert(err.message); } finally { setParsing(false); }
+    };
+
+    const handleSave = async () => {
+        setParsing(true);
+        // 1. Update Name
+        if(name !== subject.name) {
+            await db.collection('users').doc(user.uid).collection('subjects').doc(subject.id).update({ name });
+        }
+
+        // 2. If new syllabus provided, parse and ADD to topics
+        if(syllabus) {
+            try {
+                const response = await fetch('/api/parse-syllabus', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ syllabusText: syllabus }) });
+                const data = await response.json();
+                if(data.error) throw new Error(data.error);
+                
+                // Add new topics
+                const batch = db.batch();
+                const subRef = db.collection('users').doc(user.uid).collection('subjects').doc(subject.id);
+                
+                // data.syllabusData is [{unit:..., topics:[]}]
+                let newCount = 0;
+                data.syllabusData.forEach(unitObj => {
+                    unitObj.topics.forEach(tName => {
+                        const ref = subRef.collection('topics').doc();
+                        batch.set(ref, { name: tName, unit: unitObj.unit, completed: false, score: 0 });
+                        newCount++;
+                    });
+                });
+                await batch.commit();
+                // Update total count roughly
+                await subRef.update({ totalTopics: subject.totalTopics + newCount });
+            } catch(err) { alert("Error processing new content: " + err.message); }
+        }
+        setParsing(false);
+        onUpdate(); // Refresh parent
+        onClose();
+    };
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm fade-in p-4">
+            <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 max-w-2xl w-full shadow-2xl border border-slate-200 dark:border-slate-700 max-h-[90vh] overflow-y-auto">
+                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">Edit Subject</h2>
+                
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Subject Name</label>
+                <input value={name} onChange={e => setName(e.target.value)} className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 mb-6" />
+
+                <div className="mb-6">
+                    <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Add New Content (Optional)</label>
+                    <div className="flex gap-2 mb-2">
+                        <div onClick={() => fileRef.current.click()} className="flex-1 p-3 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl flex items-center justify-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-500 text-sm"><Icons.Upload /> &nbsp; Upload File</div>
+                        <input type="file" ref={fileRef} className="hidden" onChange={handleFile} />
+                    </div>
+                    <textarea value={syllabus} onChange={e => setSyllabus(e.target.value)} className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 h-20 text-sm" placeholder="Paste text to append..." />
+                </div>
+
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Manage Topics ({topics.length})</label>
+                <div className="bg-slate-50 dark:bg-slate-900 rounded-xl p-4 mb-6 max-h-48 overflow-y-auto border border-slate-200 dark:border-slate-700">
+                    {loadingTopics ? <Icons.Loader /> : topics.map(t => (
+                        <div key={t.id} className="flex justify-between items-center py-2 border-b border-slate-200 dark:border-slate-700 last:border-0">
+                            <span className="text-sm text-slate-700 dark:text-slate-300">{t.name} <span className="text-[10px] text-slate-400 bg-slate-200 dark:bg-slate-800 px-1 rounded ml-2">{t.unit}</span></span>
+                            <button onClick={() => handleDeleteTopic(t.id)} className="text-red-400 hover:text-red-600 p-1"><Icons.Cross /></button>
+                        </div>
+                    ))}
+                </div>
+
+                <div className="flex gap-3">
+                    <button onClick={onClose} className="flex-1 py-3 rounded-xl border border-slate-200 dark:border-slate-600 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700">Close</button>
+                    <button onClick={handleSave} disabled={parsing} className="flex-1 py-3 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 flex justify-center items-center gap-2">
+                        {parsing ? <><Icons.Loader /> Saving...</> : "Save Changes"}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// --- ADD SUBJECT MODAL ---
 const AddSubjectModal = ({ onClose, onSave }) => {
     const [name, setName] = useState('');
     const [syllabus, setSyllabus] = useState('');
@@ -56,42 +167,29 @@ const AddSubjectModal = ({ onClose, onSave }) => {
     const fileRef = useRef(null);
 
     const handleFile = async (e) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        setFileName(file.name);
-        setParsing(true);
+        const file = e.target.files?.[0]; if (!file) return;
+        setFileName(file.name); setParsing(true);
         try {
             let text = "";
             if (file.type === 'application/pdf') {
                 const arrayBuffer = await file.arrayBuffer();
                 const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
                 const maxPages = Math.min(pdf.numPages, 15); 
-                for (let i = 1; i <= maxPages; i++) {
-                    const page = await pdf.getPage(i);
-                    const textContent = await page.getTextContent();
-                    text += textContent.items.map(item => item.str).join(' ') + "\n";
-                }
-            } else {
-                text = await file.text();
-            }
+                for (let i = 1; i <= maxPages; i++) { const page = await pdf.getPage(i); const textContent = await page.getTextContent(); text += textContent.items.map(item => item.str).join(' ') + "\n"; }
+            } else { text = await file.text(); }
             setSyllabus(text); 
-        } catch (err) { alert("Error reading file: " + err.message); } finally { setParsing(false); }
+        } catch (err) { alert(err.message); } finally { setParsing(false); }
     };
 
     const handleSubmit = async () => {
-        if (!name || !syllabus) return alert("Please provide a subject name and syllabus.");
+        if (!name || !syllabus) return alert("Please fill all fields.");
         setParsing(true);
         try {
-            const response = await fetch('/api/parse-syllabus', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ syllabusText: syllabus })
-            });
+            const response = await fetch('/api/parse-syllabus', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ syllabusText: syllabus }) });
             const data = await response.json();
             if(data.error) throw new Error(data.error);
-            // Expecting structure: [{ unit: "Unit 1", topics: ["A", "B"] }]
             onSave(name, data.syllabusData);
-        } catch (err) { alert("Error parsing syllabus: " + err.message); setParsing(false); }
+        } catch (err) { alert("Error: " + err.message); setParsing(false); }
     };
 
     return (
@@ -99,15 +197,14 @@ const AddSubjectModal = ({ onClose, onSave }) => {
             <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 max-w-lg w-full shadow-2xl border border-slate-200 dark:border-slate-700">
                 <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">Add New Subject</h2>
                 <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Subject Name</label>
-                <input value={name} onChange={e => setName(e.target.value)} className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 mb-4 focus:outline-none focus:border-indigo-500" placeholder="e.g. Physics" />
-                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Syllabus Source</label>
+                <input value={name} onChange={e => setName(e.target.value)} className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 mb-4" placeholder="e.g. Physics" />
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Syllabus</label>
                 <div onClick={() => fileRef.current.click()} className="w-full p-4 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition mb-4">
                     <div className="text-slate-400 dark:text-slate-500 mb-2"><Icons.Upload /></div>
-                    <p className="text-sm font-medium text-slate-600 dark:text-slate-300">{fileName || "Click to Upload Syllabus (PDF/TXT)"}</p>
+                    <p className="text-sm font-medium text-slate-600 dark:text-slate-300">{fileName || "Click to Upload (PDF/TXT)"}</p>
                     <input type="file" ref={fileRef} className="hidden" accept=".pdf,.txt" onChange={handleFile} />
                 </div>
-                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Or Paste Text</label>
-                <textarea value={syllabus} onChange={e => setSyllabus(e.target.value)} className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 mb-6 h-24 focus:outline-none focus:border-indigo-500" placeholder="Unit 1: Motion..." />
+                <textarea value={syllabus} onChange={e => setSyllabus(e.target.value)} className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 mb-6 h-24" placeholder="Or paste text..." />
                 <div className="flex gap-3">
                     <button onClick={onClose} className="flex-1 py-3 rounded-xl border border-slate-200 dark:border-slate-600 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700">Cancel</button>
                     <button onClick={handleSubmit} disabled={parsing} className="flex-1 py-3 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 flex justify-center items-center gap-2">
@@ -145,11 +242,8 @@ const QuickGenerator = ({ onGenerate, loading, error, progressText }) => {
     const fileRef = useRef(null);
 
     const handleFile = async (e) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        setFileName(file.name);
-        const text = await file.text();
-        setSourceText(text);
+        const file = e.target.files?.[0]; if (!file) return;
+        setFileName(file.name); const text = await file.text(); setSourceText(text);
     };
 
     return (
@@ -211,14 +305,14 @@ const QuickGenerator = ({ onGenerate, loading, error, progressText }) => {
     );
 };
 
-// --- TAB 2: SUBJECT DASHBOARD ---
-const SubjectDashboard = ({ user, subjects, onSelectSubject, onAddSubject, onOpenLogin }) => {
+// --- 🔥 UPDATED SUBJECT DASHBOARD (With Delete & Edit) ---
+const SubjectDashboard = ({ user, subjects, onSelectSubject, onAddSubject, onDeleteSubject, onEditSubject, onOpenLogin }) => {
     if (!user) {
         return (
             <div className="w-full max-w-2xl mx-auto text-center py-20 fade-in">
                 <div className="w-24 h-24 bg-slate-200 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-6"><Icons.Lock /></div>
                 <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">Dashboard Locked</h1>
-                <p className="text-slate-500 dark:text-slate-400 mb-8 max-w-md mx-auto">The Syllabus Tracker is an advanced feature. Please login to manage subjects and track your learning progress.</p>
+                <p className="text-slate-500 dark:text-slate-400 mb-8 max-w-md mx-auto">Please login to manage subjects and track your learning progress.</p>
                 <button onClick={onOpenLogin} className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg hover:bg-indigo-700 transition">Login to Unlock</button>
             </div>
         );
@@ -241,16 +335,23 @@ const SubjectDashboard = ({ user, subjects, onSelectSubject, onAddSubject, onOpe
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {subjects.map(sub => (
-                        <div key={sub.id} onClick={() => onSelectSubject(sub)} className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-md border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-indigo-500 dark:hover:border-[#10b981] transition group">
-                            <div className="flex justify-between items-start mb-4">
-                                <div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl text-indigo-600 dark:text-indigo-400 group-hover:scale-110 transition"><Icons.Book /></div>
-                                <span className="text-xs font-bold text-slate-400">{sub.totalTopics} Topics</span>
+                        <div key={sub.id} className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-md border border-slate-200 dark:border-slate-700 relative group transition hover:border-indigo-500 dark:hover:border-[#10b981]">
+                            {/* 🔥 Edit/Delete Actions */}
+                            <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button onClick={(e) => { e.stopPropagation(); onEditSubject(sub); }} className="p-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-500 hover:text-blue-500"><Icons.Edit /></button>
+                                <button onClick={(e) => { e.stopPropagation(); onDeleteSubject(sub.id); }} className="p-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-500 hover:text-red-500"><Icons.Trash /></button>
                             </div>
-                            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">{sub.name}</h3>
-                            <div className="w-full h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-                                <div className="h-full bg-indigo-500 dark:bg-[#10b981]" style={{ width: `${(sub.completed / sub.totalTopics) * 100}%` }}></div>
+
+                            <div onClick={() => onSelectSubject(sub)} className="cursor-pointer">
+                                <div className="flex justify-between items-start mb-4">
+                                    <div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl text-indigo-600 dark:text-indigo-400"><Icons.Book /></div>
+                                </div>
+                                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">{sub.name}</h3>
+                                <div className="w-full h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                                    <div className="h-full bg-indigo-500 dark:bg-[#10b981]" style={{ width: `${(sub.completed / sub.totalTopics) * 100}%` }}></div>
+                                </div>
+                                <p className="text-xs text-slate-400 mt-2 text-right">{sub.completed} / {sub.totalTopics} Done</p>
                             </div>
-                            <p className="text-xs text-slate-400 mt-2 text-right">{sub.completed} / {sub.totalTopics} Done</p>
                         </div>
                     ))}
                 </div>
@@ -259,11 +360,10 @@ const SubjectDashboard = ({ user, subjects, onSelectSubject, onAddSubject, onOpe
     );
 };
 
-// --- 🔥 UPDATED SUBJECT DETAIL (Unit Grouping & Learn Buttons) ---
+// --- SUBJECT DETAIL (Units View) ---
 const SubjectDetail = ({ subject, topics, onBack, onStartTopic, onLearnTopic }) => {
     const [selectedUnit, setSelectedUnit] = useState(null);
 
-    // Group Topics by Unit
     const units = useMemo(() => {
         const groups = {};
         topics.forEach(t => {
@@ -276,19 +376,16 @@ const SubjectDetail = ({ subject, topics, onBack, onStartTopic, onLearnTopic }) 
         return Object.values(groups);
     }, [topics]);
 
-    // View A: List of Units
     if (!selectedUnit) {
         return (
             <div className="w-full max-w-4xl mx-auto fade-in p-4">
                 <button onClick={onBack} className="mb-6 text-slate-500 hover:text-indigo-500 flex items-center gap-2 font-bold text-sm">
                     <Icons.ArrowLeft /> Back to Subjects
                 </button>
-                
                 <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 shadow-xl border border-slate-200 dark:border-slate-700 mb-8">
                     <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">{subject.name}</h1>
                     <p className="text-slate-500 dark:text-slate-400">Select a unit to explore topics.</p>
                 </div>
-
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {units.map((unit) => (
                         <div key={unit.name} onClick={() => setSelectedUnit(unit)} className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-indigo-500 dark:hover:border-[#10b981] transition group">
@@ -297,8 +394,6 @@ const SubjectDetail = ({ subject, topics, onBack, onStartTopic, onLearnTopic }) 
                                 <span className="text-xs font-bold text-slate-400">{unit.topics.length} Topics</span>
                             </div>
                             <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">{unit.name}</h3>
-                            
-                            {/* Unit Progress Bar */}
                             <div className="w-full h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
                                 <div className="h-full bg-indigo-500 dark:bg-[#10b981]" style={{ width: `${(unit.completed / unit.total) * 100}%` }}></div>
                             </div>
@@ -310,19 +405,16 @@ const SubjectDetail = ({ subject, topics, onBack, onStartTopic, onLearnTopic }) 
         );
     }
 
-    // View B: Topics in Selected Unit
     return (
         <div className="w-full max-w-4xl mx-auto fade-in p-4">
             <button onClick={() => setSelectedUnit(null)} className="mb-6 text-slate-500 hover:text-indigo-500 flex items-center gap-2 font-bold text-sm">
                 <Icons.ArrowLeft /> Back to Units
             </button>
-            
             <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 shadow-xl border border-slate-200 dark:border-slate-700 mb-6">
                 <span className="text-xs font-bold text-indigo-500 uppercase tracking-widest mb-2 block">{subject.name}</span>
                 <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">{selectedUnit.name}</h1>
                 <p className="text-slate-500 dark:text-slate-400">Select a topic to Learn or Quiz.</p>
             </div>
-
             <div className="space-y-3">
                 {selectedUnit.topics.map((topic, index) => (
                     <div key={index} className="flex flex-col md:flex-row md:items-center justify-between p-5 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-indigo-400 transition gap-4">
@@ -330,21 +422,12 @@ const SubjectDetail = ({ subject, topics, onBack, onStartTopic, onLearnTopic }) 
                             <span className="text-slate-300 font-mono font-bold text-sm">{(index + 1).toString().padStart(2, '0')}</span>
                             <h4 className={`font-bold text-lg ${topic.completed ? 'text-green-600 dark:text-green-400' : 'text-slate-800 dark:text-slate-200'}`}>{topic.name}</h4>
                         </div>
-                        
                         <div className="flex gap-2 w-full md:w-auto">
-                            {/* Learn Button */}
-                            <button onClick={() => onLearnTopic(topic.name, subject.name)} className="flex-1 md:flex-none px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-lg font-bold text-sm hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition flex items-center justify-center gap-2">
-                                <Icons.Lightbulb /> Learn
-                            </button>
-                            
+                            <button onClick={() => onLearnTopic(topic.name, subject.name)} className="flex-1 md:flex-none px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-lg font-bold text-sm hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition flex items-center justify-center gap-2"><Icons.Lightbulb /> Learn</button>
                             {topic.completed ? (
-                                <div className="flex items-center gap-2 text-green-600 dark:text-green-400 text-sm font-bold bg-green-50 dark:bg-green-900/20 px-4 py-2 rounded-lg whitespace-nowrap">
-                                    <Icons.CheckCircle /> {topic.score}%
-                                </div>
+                                <div className="flex items-center gap-2 text-green-600 dark:text-green-400 text-sm font-bold bg-green-50 dark:bg-green-900/20 px-4 py-2 rounded-lg whitespace-nowrap"><Icons.CheckCircle /> {topic.score}%</div>
                             ) : (
-                                <button onClick={() => onStartTopic(topic.name)} className="flex-1 md:flex-none px-4 py-2 bg-indigo-600 text-white rounded-lg font-bold text-sm hover:bg-indigo-700 transition flex items-center justify-center gap-2">
-                                    <Icons.Play /> Quiz
-                                </button>
+                                <button onClick={() => onStartTopic(topic.name)} className="flex-1 md:flex-none px-4 py-2 bg-indigo-600 text-white rounded-lg font-bold text-sm hover:bg-indigo-700 transition flex items-center justify-center gap-2"><Icons.Play /> Quiz</button>
                             )}
                         </div>
                     </div>
@@ -354,61 +437,24 @@ const SubjectDetail = ({ subject, topics, onBack, onStartTopic, onLearnTopic }) 
     );
 };
 
-// --- TAB 3: HISTORY DASHBOARD ---
+// --- HISTORY DASHBOARD (Same as before) ---
 const HistoryDashboard = ({ user, onOpenLogin, onSelectHistory }) => {
     const [history, setHistory] = useState([]);
     const [loading, setLoading] = useState(true);
-
     useEffect(() => {
         if (!user) return;
-        const fetchHistory = async () => {
-            const snap = await db.collection('users').doc(user.uid).collection('history').orderBy('date', 'desc').get();
-            const hist = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            setHistory(hist);
-            setLoading(false);
-        };
-        fetchHistory();
+        const fetchHistory = async () => { const snap = await db.collection('users').doc(user.uid).collection('history').orderBy('date', 'desc').get(); const hist = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); setHistory(hist); setLoading(false); }; fetchHistory();
     }, [user]);
-
-    if (!user) {
-        return (
-            <div className="w-full max-w-2xl mx-auto text-center py-20 fade-in">
-                <div className="w-24 h-24 bg-slate-200 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-6"><Icons.Lock /></div>
-                <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">History Locked</h1>
-                <p className="text-slate-500 dark:text-slate-400 mb-8">Login to see your past quiz performance and review answers.</p>
-                <button onClick={onOpenLogin} className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg hover:bg-indigo-700 transition">Login to Unlock</button>
-            </div>
-        );
-    }
-
+    if (!user) return ( <div className="w-full max-w-2xl mx-auto text-center py-20 fade-in"><div className="w-24 h-24 bg-slate-200 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-6"><Icons.Lock /></div><h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">History Locked</h1><p className="text-slate-500 dark:text-slate-400 mb-8">Login to see your past quiz performance.</p><button onClick={onOpenLogin} className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg hover:bg-indigo-700 transition">Login to Unlock</button></div> );
     return (
         <div className="w-full max-w-4xl mx-auto fade-in p-4">
             <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">Quiz History</h1>
-            {loading ? <div className="text-center p-10"><Icons.Loader /></div> : history.length === 0 ? (
-                <div className="text-center py-20 bg-white dark:bg-slate-800 rounded-3xl border border-dashed border-slate-300 dark:border-slate-700">
-                    <div className="text-slate-300 mb-4 flex justify-center"><Icons.Clock /></div>
-                    <h3 className="text-lg font-bold text-slate-500 dark:text-slate-400">No quizzes taken yet</h3>
-                </div>
-            ) : (
-                <div className="space-y-4">
-                    {history.map((item) => (
-                        <div key={item.id} className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex justify-between items-center hover:border-indigo-500 dark:hover:border-[#10b981] transition">
-                            <div>
-                                <h3 className="font-bold text-slate-900 dark:text-white mb-1">{item.topic}</h3>
-                                <p className="text-xs text-slate-500 dark:text-slate-400">
-                                    {item.date?.toDate ? item.date.toDate().toLocaleDateString() : 'Just now'} • Score: {item.score}/{item.total}
-                                </p>
-                            </div>
-                            <button onClick={() => onSelectHistory(item)} className="px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg text-sm font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/30 hover:text-indigo-600 dark:hover:text-indigo-400 transition">Review</button>
-                        </div>
-                    ))}
-                </div>
-            )}
+            {loading ? <div className="text-center p-10"><Icons.Loader /></div> : history.length === 0 ? <div className="text-center py-20 bg-white dark:bg-slate-800 rounded-3xl border border-dashed border-slate-300 dark:border-slate-700"><div className="text-slate-300 mb-4 flex justify-center"><Icons.Clock /></div><h3 className="text-lg font-bold text-slate-500 dark:text-slate-400">No quizzes taken yet</h3></div> : <div className="space-y-4">{history.map((item) => (<div key={item.id} className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex justify-between items-center hover:border-indigo-500 dark:hover:border-[#10b981] transition"><div><h3 className="font-bold text-slate-900 dark:text-white mb-1">{item.topic}</h3><p className="text-xs text-slate-500 dark:text-slate-400">{item.date?.toDate ? item.date.toDate().toLocaleDateString() : 'Just now'} • Score: {item.score}/{item.total}</p></div><button onClick={() => onSelectHistory(item)} className="px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg text-sm font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/30 hover:text-indigo-600 dark:hover:text-indigo-400 transition">Review</button></div>))}</div>}
         </div>
     );
 };
 
-// --- TAB 4: LEARN DASHBOARD ---
+// --- LEARN DASHBOARD (Same as before) ---
 const LearnDashboard = ({ user, subjects, initialData, onStartTest, onOpenLogin }) => {
     const [mode, setMode] = useState('topic');
     const [topic, setTopic] = useState('');
@@ -424,252 +470,76 @@ const LearnDashboard = ({ user, subjects, initialData, onStartTest, onOpenLogin 
     const [sourceText, setSourceText] = useState('');
     const fileRef = useRef(null);
 
-    useEffect(() => {
-        if(initialData && initialData.topic) {
-            setMode('topic');
-            setTopic(initialData.topic);
-            if(initialData.subject) setSelectedSubject(initialData.subject);
-        }
-    }, [initialData]);
+    useEffect(() => { if(initialData && initialData.topic) { setMode('topic'); setTopic(initialData.topic); if(initialData.subject) setSelectedSubject(initialData.subject); } }, [initialData]);
 
     const handleSubjectChange = async (e) => {
-        const subName = e.target.value;
-        setSelectedSubject(subName);
-        setSelectedUnit(''); setTopic(''); setAllSubjectTopics([]); setAvailableUnits([]); setFilteredTopics([]);
+        const subName = e.target.value; setSelectedSubject(subName); setSelectedUnit(''); setTopic(''); setAllSubjectTopics([]); setAvailableUnits([]); setFilteredTopics([]);
         if (!subName) return;
         const subObj = subjects.find(s => s.name === subName);
         if (subObj) {
             setIsFetchingTopics(true);
-            try {
-                const snap = await db.collection('users').doc(user.uid).collection('subjects').doc(subObj.id).collection('topics').get();
-                const fetchedData = snap.docs.map(doc => doc.data());
-                setAllSubjectTopics(fetchedData);
-                const units = [...new Set(fetchedData.map(item => item.unit).filter(Boolean))];
-                setAvailableUnits(units);
-                if(units.length === 0) setFilteredTopics(fetchedData.map(t => t.name));
-            } catch (err) { console.error("Error fetching topics:", err); }
-            setIsFetchingTopics(false);
+            try { const snap = await db.collection('users').doc(user.uid).collection('subjects').doc(subObj.id).collection('topics').get(); const fetchedData = snap.docs.map(doc => doc.data()); setAllSubjectTopics(fetchedData); const units = [...new Set(fetchedData.map(item => item.unit).filter(Boolean))]; setAvailableUnits(units); if(units.length === 0) setFilteredTopics(fetchedData.map(t => t.name)); } catch (err) { console.error(err); } setIsFetchingTopics(false);
         }
     };
 
-    const handleUnitChange = (e) => {
-        const unit = e.target.value;
-        setSelectedUnit(unit);
-        setTopic('');
-        if(unit) {
-            const filtered = allSubjectTopics.filter(t => t.unit === unit).map(t => t.name);
-            setFilteredTopics(filtered);
-        } else { setFilteredTopics([]); }
-    };
+    const handleUnitChange = (e) => { const unit = e.target.value; setSelectedUnit(unit); setTopic(''); if(unit) { const filtered = allSubjectTopics.filter(t => t.unit === unit).map(t => t.name); setFilteredTopics(filtered); } else { setFilteredTopics([]); } };
+    const handleFile = async (e) => { const file = e.target.files?.[0]; if (!file) return; setFileName(file.name); try { let text = ""; if (file.type === 'application/pdf') { const arrayBuffer = await file.arrayBuffer(); const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise; const maxPages = Math.min(pdf.numPages, 15); for (let i = 1; i <= maxPages; i++) { const page = await pdf.getPage(i); const textContent = await page.getTextContent(); text += textContent.items.map(item => item.str).join(' ') + "\n"; } } else { text = await file.text(); } setSourceText(text); } catch (err) { alert("Error: " + err.message); } };
+    const handleGenerateLesson = async () => { if (mode === 'topic' && !topic) return alert("Enter topic"); if (mode === 'file' && !sourceText) return alert("Upload file"); setLoading(true); try { const response = await fetch('/api/generate-lesson', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ topic: mode === 'topic' ? topic : null, subjectContext: mode === 'topic' ? selectedSubject : null, sourceText: mode === 'file' ? sourceText : null }) }); const data = await response.json(); if (data.error) throw new Error(data.error); setLesson(data.lesson); } catch (e) { alert(e.message); } finally { setLoading(false); } };
 
-    const handleFile = async (e) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        setFileName(file.name);
-        try {
-            let text = "";
-            if (file.type === 'application/pdf') {
-                const arrayBuffer = await file.arrayBuffer();
-                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-                const maxPages = Math.min(pdf.numPages, 15); 
-                for (let i = 1; i <= maxPages; i++) {
-                    const page = await pdf.getPage(i);
-                    const textContent = await page.getTextContent();
-                    text += textContent.items.map(item => item.str).join(' ') + "\n";
-                }
-            } else { text = await file.text(); }
-            setSourceText(text);
-        } catch (err) { alert("Error reading file: " + err.message); }
-    };
-
-    const handleGenerateLesson = async () => {
-        if (mode === 'topic' && !topic) return alert("Please enter a topic");
-        if (mode === 'file' && !sourceText) return alert("Please upload a file or paste text");
-        setLoading(true);
-        try {
-            const response = await fetch('/api/generate-lesson', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ topic: mode === 'topic' ? topic : null, subjectContext: mode === 'topic' ? selectedSubject : null, sourceText: mode === 'file' ? sourceText : null })
-            });
-            const data = await response.json();
-            if (data.error) throw new Error(data.error);
-            setLesson(data.lesson);
-        } catch (e) { alert(e.message); } finally { setLoading(false); }
-    };
-
-    if (!user) return (
-        <div className="w-full max-w-2xl mx-auto text-center py-20 fade-in">
-            <div className="w-24 h-24 bg-slate-200 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-6"><Icons.Lock /></div>
-            <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">Learning Locked</h1>
-            <p className="text-slate-500 dark:text-slate-400 mb-8">Login to access AI tutoring from topics and documents.</p>
-            <button onClick={onOpenLogin} className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg hover:bg-indigo-700 transition">Login to Unlock</button>
-        </div>
-    );
+    if (!user) return ( <div className="w-full max-w-2xl mx-auto text-center py-20 fade-in"><div className="w-24 h-24 bg-slate-200 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-6"><Icons.Lock /></div><h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">Learning Locked</h1><p className="text-slate-500 dark:text-slate-400 mb-8">Login required.</p><button onClick={onOpenLogin} className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg hover:bg-indigo-700 transition">Login to Unlock</button></div> );
 
     return (
         <div className="w-full max-w-4xl mx-auto fade-in p-4">
             {!lesson ? (
                 <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 md:p-12 shadow-2xl border border-slate-200 dark:border-slate-700">
-                    <div className="text-center mb-8">
-                        <div className="w-16 h-16 bg-indigo-100 dark:bg-indigo-900/20 rounded-2xl flex items-center justify-center mx-auto mb-4 text-indigo-600 dark:text-indigo-400"><Icons.Lightbulb /></div>
-                        <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Start Learning</h1>
-                        <p className="text-slate-500 dark:text-slate-400">Get an instant AI-curated lesson from a topic or your own material.</p>
-                    </div>
+                    <div className="text-center mb-8"><div className="w-16 h-16 bg-indigo-100 dark:bg-indigo-900/20 rounded-2xl flex items-center justify-center mx-auto mb-4 text-indigo-600 dark:text-indigo-400"><Icons.Lightbulb /></div><h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Start Learning</h1><p className="text-slate-500 dark:text-slate-400">Get an instant AI lesson.</p></div>
                     <div className="space-y-6 max-w-lg mx-auto">
-                        <div className="flex gap-4 mb-6">
-                            <button onClick={() => setMode('topic')} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all border ${mode === 'topic' ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400'}`}>By Topic</button>
-                            <button onClick={() => setMode('file')} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all border ${mode === 'file' ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400'}`}>From File/Text</button>
-                        </div>
-                        {mode === 'topic' ? (
-                            <>
-                                {subjects.length > 0 && (
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Subject Context</label>
-                                        <select value={selectedSubject} onChange={handleSubjectChange} className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:outline-none focus:border-indigo-500">
-                                            <option value="">General Topic</option>
-                                            {subjects.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-                                        </select>
-                                    </div>
-                                )}
-                                {availableUnits.length > 0 && (
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Select Unit</label>
-                                        <select value={selectedUnit} onChange={handleUnitChange} className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:outline-none focus:border-indigo-500">
-                                            <option value="">-- Select Unit --</option>
-                                            {availableUnits.map((u, i) => <option key={i} value={u}>{u}</option>)}
-                                        </select>
-                                    </div>
-                                )}
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-400 uppercase mb-2">{selectedSubject && (filteredTopics.length > 0 || availableUnits.length > 0) ? "Select Topic" : "Topic Name"}</label>
-                                    {selectedSubject && (filteredTopics.length > 0 || availableUnits.length > 0) ? (
-                                        isFetchingTopics ? <div className="p-3 text-slate-500 text-sm"><Icons.Loader /> Loading...</div> : (
-                                            <select value={topic} onChange={e => setTopic(e.target.value)} disabled={availableUnits.length > 0 && !selectedUnit} className="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:outline-none focus:border-indigo-500 text-lg disabled:opacity-50">
-                                                <option value="">{availableUnits.length > 0 && !selectedUnit ? "-- Select Unit First --" : "-- Select Topic --"}</option>
-                                                {filteredTopics.map((t, i) => <option key={i} value={t}>{t}</option>)}
-                                            </select>
-                                        )
-                                    ) : (<input value={topic} onChange={e => setTopic(e.target.value)} placeholder="e.g. Newton's Laws..." className="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:outline-none focus:border-indigo-500 text-lg" />)}
-                                </div>
-                            </>
-                        ) : (
-                            <>
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Upload Document</label>
-                                    <div onClick={() => fileRef.current.click()} className="w-full p-4 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition mb-4">
-                                        <div className="text-slate-400 dark:text-slate-500 mb-2"><Icons.Upload /></div>
-                                        <p className="text-sm font-medium text-slate-600 dark:text-slate-300">{fileName || "Click to Upload PDF/TXT"}</p>
-                                        <input type="file" ref={fileRef} className="hidden" accept=".pdf,.txt" onChange={handleFile} />
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Or Paste Text Content</label>
-                                    <textarea value={sourceText} onChange={e => setSourceText(e.target.value)} className="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 h-32 focus:outline-none focus:border-indigo-500" placeholder="Paste your study material here..." />
-                                </div>
-                            </>
-                        )}
-                        <button onClick={handleGenerateLesson} disabled={loading} className="w-full py-4 rounded-xl bg-indigo-600 text-white font-bold shadow-lg hover:bg-indigo-700 transition flex justify-center items-center gap-2">
-                            {loading ? <><Icons.Loader /> Generating Lesson...</> : "Start Learning"}
-                        </button>
+                        <div className="flex gap-4 mb-6"><button onClick={() => setMode('topic')} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all border ${mode === 'topic' ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400'}`}>By Topic</button><button onClick={() => setMode('file')} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all border ${mode === 'file' ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400'}`}>From File/Text</button></div>
+                        {mode === 'topic' ? ( <> {subjects.length > 0 && ( <div><label className="block text-xs font-bold text-slate-400 uppercase mb-2">Context</label><select value={selectedSubject} onChange={handleSubjectChange} className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:outline-none focus:border-indigo-500"><option value="">General</option>{subjects.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}</select></div> )} {availableUnits.length > 0 && ( <div><label className="block text-xs font-bold text-slate-400 uppercase mb-2">Unit</label><select value={selectedUnit} onChange={handleUnitChange} className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:outline-none focus:border-indigo-500"><option value="">-- Select Unit --</option>{availableUnits.map((u, i) => <option key={i} value={u}>{u}</option>)}</select></div> )} <div><label className="block text-xs font-bold text-slate-400 uppercase mb-2">{selectedSubject && (filteredTopics.length > 0 || availableUnits.length > 0) ? "Select Topic" : "Topic Name"}</label>{selectedSubject && (filteredTopics.length > 0 || availableUnits.length > 0) ? ( isFetchingTopics ? <div className="p-3 text-slate-500 text-sm"><Icons.Loader /> Loading...</div> : ( <select value={topic} onChange={e => setTopic(e.target.value)} disabled={availableUnits.length > 0 && !selectedUnit} className="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:outline-none focus:border-indigo-500 text-lg disabled:opacity-50"><option value="">{availableUnits.length > 0 && !selectedUnit ? "-- Select Unit First --" : "-- Select Topic --"}</option>{filteredTopics.map((t, i) => <option key={i} value={t}>{t}</option>)}</select> ) ) : (<input value={topic} onChange={e => setTopic(e.target.value)} placeholder="e.g. Newton's Laws..." className="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:outline-none focus:border-indigo-500 text-lg" />)}</div> </> ) : ( <> <div><label className="block text-xs font-bold text-slate-400 uppercase mb-2">Upload</label><div onClick={() => fileRef.current.click()} className="w-full p-4 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition mb-4"><div className="text-slate-400 dark:text-slate-500 mb-2"><Icons.Upload /></div><p className="text-sm font-medium text-slate-600 dark:text-slate-300">{fileName || "Click to Upload"}</p><input type="file" ref={fileRef} className="hidden" accept=".pdf,.txt" onChange={handleFile} /></div></div> <div><label className="block text-xs font-bold text-slate-400 uppercase mb-2">Paste Text</label><textarea value={sourceText} onChange={e => setSourceText(e.target.value)} className="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 h-32 focus:outline-none focus:border-indigo-500" placeholder="Content..." /></div> </> )}
+                        <button onClick={handleGenerateLesson} disabled={loading} className="w-full py-4 rounded-xl bg-indigo-600 text-white font-bold shadow-lg hover:bg-indigo-700 transition flex justify-center items-center gap-2">{loading ? <><Icons.Loader /> Generating...</> : "Start Learning"}</button>
                     </div>
                 </div>
             ) : (
                 <div className="fade-in">
                     <button onClick={() => setLesson(null)} className="mb-6 text-slate-500 hover:text-indigo-500 flex items-center gap-2 font-bold text-sm"><Icons.ArrowLeft /> Back</button>
-                    <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 md:p-12 shadow-xl border border-slate-200 dark:border-slate-700 mb-8 prose dark:prose-invert max-w-none whitespace-pre-wrap">
-                        <div dangerouslySetInnerHTML={{ __html: lesson.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br/>') }} />
-                    </div>
-                    <div className="text-center">
-                        <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4">Ready to test your knowledge?</h3>
-                        <button onClick={() => onStartTest(lesson)} className="px-8 py-4 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold shadow-lg transition flex items-center gap-2 mx-auto">
-                            <Icons.Brain /> Generate Quiz on this Lesson
-                        </button>
-                    </div>
+                    <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 md:p-12 shadow-xl border border-slate-200 dark:border-slate-700 mb-8 prose dark:prose-invert max-w-none whitespace-pre-wrap"><div dangerouslySetInnerHTML={{ __html: lesson.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br/>') }} /></div>
+                    <div className="text-center"><h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4">Ready to test?</h3><button onClick={() => onStartTest(lesson)} className="px-8 py-4 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold shadow-lg transition flex items-center gap-2 mx-auto"><Icons.Brain /> Generate Quiz</button></div>
                 </div>
             )}
         </div>
     );
 };
 
-// --- QUIZ & RESULT VIEW (Same as before) ---
+// --- REUSED QUIZ COMPONENTS ---
 const QuizView = ({ quizData, currentQ, answers, onAnswer, onNext, onQuit }) => {
-    const q = quizData[currentQ];
-    const answered = answers[currentQ];
-    const progress = ((currentQ + 1) / quizData.length) * 100;
+    const q = quizData[currentQ]; const answered = answers[currentQ]; const progress = ((currentQ + 1) / quizData.length) * 100;
     return (
-        <div className="w-full max-w-2xl mx-auto fade-in">
-            <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-700">
-                 <div className="h-1.5 bg-slate-100 dark:bg-slate-900 w-full"><div className="h-full bg-indigo-500 dark:bg-[#10b981] transition-all duration-500" style={{ width: `${progress}%` }}></div></div>
-                <div className="p-8 md:p-10">
-                    <div className="flex justify-between items-center mb-6"><span className="text-[10px] font-bold text-indigo-500 dark:text-[#10b981] bg-indigo-50 dark:bg-[#10b981]/10 px-3 py-1 rounded-full uppercase tracking-widest">Q{currentQ + 1} / {quizData.length}</span><button onClick={onQuit} className="text-slate-400 hover:text-red-500 text-xs font-bold uppercase tracking-widest">Quit</button></div>
-                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-8 leading-snug">{q.question}</h2>
-                    <div className="space-y-3">
-                        {q.options.map((optText, i) => {
-                            const label = getLabel(i); const content = cleanOptionText(optText);
-                            const isSel = answers[currentQ] === label; const isRight = label === q.correctAnswer; 
-                            let containerStyle = "w-full flex items-stretch rounded-xl overflow-hidden border-2 transition-all duration-200 cursor-pointer ";
-                            let labelStyle = "w-12 flex items-center justify-center font-bold text-lg border-r-2 ";
-                            let textStyle = "flex-1 p-4 text-left font-medium text-sm flex items-center ";
-                            if (answered) {
-                                if (isRight) { containerStyle += "border-green-500 bg-green-50 dark:bg-green-900/20"; labelStyle += "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 border-green-500"; textStyle += "text-green-800 dark:text-green-300"; } else if (isSel) { containerStyle += "border-red-500 bg-red-50 dark:bg-red-900/20"; labelStyle += "bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400 border-red-500"; textStyle += "text-red-800 dark:text-red-300"; } else { containerStyle += "border-slate-200 dark:border-slate-700 opacity-50"; labelStyle += "bg-slate-100 dark:bg-slate-700 border-slate-200 dark:border-slate-700 text-slate-500"; textStyle += "text-slate-500 dark:text-slate-400"; }
-                            } else { containerStyle += "border-slate-200 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-[#10b981] bg-white dark:bg-slate-800"; labelStyle += "bg-slate-100 dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 group-hover:text-indigo-500"; textStyle += "text-slate-700 dark:text-slate-300"; }
-                            return (<div key={i} onClick={() => !answered && onAnswer(label)} className={containerStyle}><div className={labelStyle}>{label}</div><div className={textStyle}>{content}</div></div>);
-                        })}
-                    </div>
-                    {answered && <div className="mt-6 p-4 rounded-xl bg-indigo-50 dark:bg-slate-900 border border-indigo-100 dark:border-slate-600 text-slate-600 dark:text-slate-400 text-sm"><strong className="text-indigo-600 dark:text-[#10b981] block text-xs uppercase mb-1">Insight</strong>{q.explanation}</div>}
-                </div>
-                {answered && <div className="p-6 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-700 flex justify-end"><button onClick={onNext} className="px-8 py-3 bg-indigo-600 dark:bg-[#10b981] text-white dark:text-slate-900 rounded-xl font-bold shadow-lg flex items-center gap-2 hover:scale-105 transition transform">{currentQ < quizData.length - 1 ? "Next" : "Finish"} <Icons.ArrowRight /></button></div>}
+        <div className="w-full max-w-2xl mx-auto fade-in bg-white dark:bg-slate-800 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-700">
+            <div className="h-1.5 bg-slate-100 dark:bg-slate-900 w-full"><div className="h-full bg-indigo-500 dark:bg-[#10b981] transition-all duration-500" style={{ width: `${progress}%` }}></div></div>
+            <div className="p-8 md:p-10">
+                <div className="flex justify-between items-center mb-6"><span className="text-[10px] font-bold text-indigo-500 dark:text-[#10b981] bg-indigo-50 dark:bg-[#10b981]/10 px-3 py-1 rounded-full uppercase tracking-widest">Q{currentQ + 1} / {quizData.length}</span><button onClick={onQuit} className="text-slate-400 hover:text-red-500 text-xs font-bold uppercase tracking-widest">Quit</button></div>
+                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-8 leading-snug">{q.question}</h2>
+                <div className="space-y-3">{q.options.map((opt, i) => { const label = getLabel(i); const content = cleanOptionText(opt); const isSel = answers[currentQ] === label; const isRight = label === q.correctAnswer; let cls = "w-full flex items-stretch rounded-xl overflow-hidden border-2 transition-all duration-200 cursor-pointer "; let lbl = "w-12 flex items-center justify-center font-bold text-lg border-r-2 "; let txt = "flex-1 p-4 text-left font-medium text-sm flex items-center "; if(answered) { if(isRight) { cls+="border-green-500 bg-green-50 dark:bg-green-900/20"; lbl+="bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 border-green-500"; txt+="text-green-800 dark:text-green-300"; } else if(isSel) { cls+="border-red-500 bg-red-50 dark:bg-red-900/20"; lbl+="bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400 border-red-500"; txt+="text-red-800 dark:text-red-300"; } else { cls+="border-slate-200 dark:border-slate-700 opacity-50"; lbl+="bg-slate-100 dark:bg-slate-700 border-slate-200 dark:border-slate-700 text-slate-500"; txt+="text-slate-500 dark:text-slate-400"; } } else { cls+="border-slate-200 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-[#10b981] bg-white dark:bg-slate-800"; lbl+="bg-slate-100 dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 group-hover:text-indigo-500"; txt+="text-slate-700 dark:text-slate-300"; } return <div key={i} onClick={()=>!answered && onAnswer(label)} className={cls}><div className={lbl}>{label}</div><div className={txt}>{content}</div></div> })}</div>
+                {answered && <div className="mt-6 p-4 rounded-xl bg-indigo-50 dark:bg-slate-900 border border-indigo-100 dark:border-slate-600 text-slate-600 dark:text-slate-400 text-sm"><strong className="text-indigo-600 dark:text-[#10b981] block text-xs uppercase mb-1">Insight</strong>{q.explanation}</div>}
             </div>
+            {answered && <div className="p-6 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-700 flex justify-end"><button onClick={onNext} className="px-8 py-3 bg-indigo-600 dark:bg-[#10b981] text-white dark:text-slate-900 rounded-xl font-bold shadow-lg flex items-center gap-2 hover:scale-105 transition transform">{currentQ < quizData.length - 1 ? "Next" : "Finish"} <Icons.ArrowRight /></button></div>}
         </div>
     );
 };
 
 const ResultView = ({ score, total, user, quizData, userAnswers, onRetry, onOpenLogin, saveResult, isReviewMode }) => {
-    const percentage = Math.round((score / total) * 100);
+    const percentage = Math.round((score/total)*100);
     const [saved, setSaved] = useState(false);
     useEffect(() => { if (user && !saved && !isReviewMode && saveResult) { saveResult(score, total); setSaved(true); } }, [user]);
     return (
         <div className="w-full max-w-3xl mx-auto text-center fade-in pb-10">
             <div className="bg-white dark:bg-slate-800 rounded-3xl p-10 shadow-2xl border border-slate-200 dark:border-slate-700 transition-colors duration-300 mb-8">
                 <div className="w-24 h-24 mx-auto bg-indigo-100 dark:bg-[#10b981]/20 rounded-full flex items-center justify-center mb-6"><span className="text-3xl font-black text-indigo-600 dark:text-[#10b981]">{percentage}%</span></div>
-                <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-2 transition-colors">{isReviewMode ? "Quiz Review" : (percentage > 70 ? "Outstanding!" : "Good Effort!")}</h2>
-                <p className="text-slate-500 dark:text-slate-400 mb-8">You scored {score} out of {total}</p>
-                <div className="space-y-3 max-w-md mx-auto">
-                    <button onClick={onRetry} className="w-full py-4 bg-indigo-600 dark:bg-[#10b981] text-white dark:text-slate-900 rounded-xl font-bold shadow-lg hover:opacity-90 transition">{isReviewMode ? "Back to History" : "Create New Quiz"}</button>
-                    {!user && !isReviewMode && <button onClick={onOpenLogin} className="w-full py-4 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-200 dark:hover:bg-slate-600 transition flex items-center justify-center gap-2">Save My Progress <Icons.ArrowRight /></button>}
-                    {user && !isReviewMode && (<div className="text-xs text-green-500 font-bold uppercase tracking-widest mt-4">✓ Result Saved</div>)}
-                </div>
+                <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">{isReviewMode ? "Review" : "Result"}</h2>
+                <p className="text-slate-500 dark:text-slate-400 mb-8">{score}/{total}</p>
+                <div className="space-y-3 max-w-md mx-auto"><button onClick={onRetry} className="w-full py-4 bg-indigo-600 dark:bg-[#10b981] text-white dark:text-slate-900 rounded-xl font-bold shadow-lg transition">{isReviewMode ? "Back" : "New Quiz"}</button>{!user && !isReviewMode && <button onClick={onOpenLogin} className="w-full py-4 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-200 dark:hover:bg-slate-600 transition gap-2">Save <Icons.ArrowRight /></button>}</div>
             </div>
-            <div className="text-left space-y-6">
-                <h3 className="text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest text-xs text-center mb-6">Detailed Analysis</h3>
-                {quizData.map((q, index) => {
-                    const userLabel = userAnswers[index]; const correctLabel = q.correctAnswer; const isCorrect = userLabel === correctLabel;
-                    return (
-                        <div key={index} className="bg-white dark:bg-slate-800 rounded-2xl p-6 border border-slate-200 dark:border-slate-700 shadow-sm">
-                            <div className="flex items-start gap-4">
-                                <div className={`mt-1 w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-bold text-sm ${isCorrect ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'}`}>{isCorrect ? <Icons.Check /> : <Icons.Cross />}</div>
-                                <div className="w-full">
-                                    <h4 className="text-lg font-bold text-slate-900 dark:text-white mb-3">{q.question}</h4>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                        <div className={`p-3 rounded-lg text-sm border flex gap-3 items-center ${isCorrect ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-900 text-green-800 dark:text-green-400' : 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-900 text-red-800 dark:text-red-400'}`}>
-                                            <div className="font-bold px-2 py-1 rounded bg-white/50 dark:bg-black/20">{userLabel || "-"}</div> <span className="font-medium opacity-90">Your Answer</span>
-                                        </div>
-                                        {!isCorrect && (
-                                             <div className="p-3 rounded-lg text-sm bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 flex gap-3 items-center">
-                                                <div className="font-bold px-2 py-1 rounded bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-400">{correctLabel}</div> <span className="font-medium opacity-90">Correct Answer</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div className="bg-indigo-50 dark:bg-slate-900/50 p-4 rounded-xl border border-indigo-100 dark:border-slate-700">
-                                        <span className="text-[10px] font-bold text-indigo-600 dark:text-[#10b981] uppercase tracking-wider block mb-2">Theory</span>
-                                        <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">{q.explanation}</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
+            <div className="text-left space-y-6">{quizData.map((q, i) => { const usr = userAnswers[i]; const cor = q.correctAnswer; const ok = usr===cor; return <div key={i} className="bg-white dark:bg-slate-800 rounded-2xl p-6 border border-slate-200 dark:border-slate-700 shadow-sm"><div className="flex items-start gap-4"><div className={`mt-1 w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-bold text-sm ${ok ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>{ok ? <Icons.Check /> : <Icons.Cross />}</div><div className="w-full"><h4 className="text-lg font-bold text-slate-900 dark:text-white mb-3">{q.question}</h4><div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4"><div className={`p-3 rounded-lg text-sm border flex gap-3 items-center ${ok ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}><div className="font-bold px-2 py-1 rounded bg-white/50">{usr||"-"}</div><span>Your Answer</span></div>{!ok && <div className="p-3 rounded-lg text-sm bg-slate-50 dark:bg-slate-700 border border-slate-200 text-slate-700 flex gap-3 items-center"><div className="font-bold px-2 py-1 rounded bg-indigo-100 text-indigo-600">{cor}</div><span>Correct</span></div>}</div><div className="bg-indigo-50 dark:bg-slate-900/50 p-4 rounded-xl border border-indigo-100 dark:border-slate-700"><span className="text-[10px] font-bold text-indigo-600 dark:text-[#10b981] uppercase tracking-wider block mb-2">Theory</span><p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">{q.explanation}</p></div></div></div></div> })}</div>
         </div>
     );
 };
@@ -685,6 +555,8 @@ const App = () => {
     const [activeSubject, setActiveSubject] = useState(null);
     const [activeTopics, setActiveTopics] = useState([]);
     const [showAddModal, setShowAddModal] = useState(false);
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [editingSubject, setEditingSubject] = useState(null);
     const [showLoginModal, setShowLoginModal] = useState(false);
     const [learnInitData, setLearnInitData] = useState(null);
 
@@ -715,15 +587,16 @@ const App = () => {
         setShowAddModal(false); if(!user) return;
         const subRef = await db.collection('users').doc(user.uid).collection('subjects').add({ name: name, totalTopics: topicsList.length, completed: 0, createdAt: new Date() });
         const batch = db.batch();
-        topicsList.forEach(unitObj => {
-            unitObj.topics.forEach(topicName => {
-                const ref = subRef.collection('topics').doc();
-                batch.set(ref, { name: topicName, unit: unitObj.unit, completed: false, score: 0 });
-            });
-        });
+        topicsList.forEach(unitObj => { unitObj.topics.forEach(topicName => { const ref = subRef.collection('topics').doc(); batch.set(ref, { name: topicName, unit: unitObj.unit, completed: false, score: 0 }); }); });
         const totalCount = topicsList.reduce((acc, u) => acc + u.topics.length, 0);
         await subRef.update({ totalTopics: totalCount });
         await batch.commit(); fetchSubjects(user.uid);
+    };
+
+    const handleDeleteSubject = async (id) => {
+        if(!confirm("Are you sure you want to delete this subject? All progress will be lost.")) return;
+        await db.collection('users').doc(user.uid).collection('subjects').doc(id).delete();
+        fetchSubjects(user.uid);
     };
 
     const handleSelectSubject = async (sub) => {
@@ -789,8 +662,9 @@ const App = () => {
                 </div>
                 <div className="flex-1 p-4 md:p-8 flex flex-col items-center">
                     {showAddModal && <AddSubjectModal onClose={() => setShowAddModal(false)} onSave={handleCreateSubject} />}
+                    {showEditModal && <EditSubjectModal user={user} subject={editingSubject} onClose={() => setShowEditModal(false)} onUpdate={() => fetchSubjects(user.uid)} />}
                     {showLoginModal && <LoginModal onLogin={handleLogin} onClose={() => setShowLoginModal(false)} />}
-                    {view === 'home' && (activeTab === 'generator' ? (<QuickGenerator onGenerate={generateQuiz} loading={loading} error={error} progressText={progressText} />) : activeTab === 'subjects' ? (<SubjectDashboard user={user} subjects={subjects} onSelectSubject={handleSelectSubject} onAddSubject={() => setShowAddModal(true)} onOpenLogin={() => setShowLoginModal(true)} />) : activeTab === 'history' ? (<HistoryDashboard user={user} onOpenLogin={() => setShowLoginModal(true)} onSelectHistory={handleSelectHistory} />) : (<LearnDashboard user={user} subjects={subjects} initialData={learnInitData} onStartTest={(lessonText) => generateQuiz({ mode: 'file', sourceText: lessonText, topic: 'Lesson Quiz', difficulty: 'Medium', numQuestions: 5 })} onOpenLogin={() => setShowLoginModal(true)} />))}
+                    {view === 'home' && (activeTab === 'generator' ? (<QuickGenerator onGenerate={generateQuiz} loading={loading} error={error} progressText={progressText} />) : activeTab === 'subjects' ? (<SubjectDashboard user={user} subjects={subjects} onSelectSubject={handleSelectSubject} onAddSubject={() => setShowAddModal(true)} onDeleteSubject={handleDeleteSubject} onEditSubject={(sub) => { setEditingSubject(sub); setShowEditModal(true); }} onOpenLogin={() => setShowLoginModal(true)} />) : activeTab === 'history' ? (<HistoryDashboard user={user} onOpenLogin={() => setShowLoginModal(true)} onSelectHistory={handleSelectHistory} />) : (<LearnDashboard user={user} subjects={subjects} initialData={learnInitData} onStartTest={(lessonText) => generateQuiz({ mode: 'file', sourceText: lessonText, topic: 'Lesson Quiz', difficulty: 'Medium', numQuestions: 5 })} onOpenLogin={() => setShowLoginModal(true)} />))}
                     {view === 'subject-detail' && <SubjectDetail subject={activeSubject} topics={activeTopics} onBack={() => setView('home')} onStartTopic={generateQuiz} onLearnTopic={handleLearnTopic} />}
                     {view === 'quiz' && (<QuizView quizData={quizData} currentQ={currentQ} answers={answers} onAnswer={(label) => { const correctLabel = quizData[currentQ].correctAnswer; setAnswers({...answers, [currentQ]: label}); if(label === correctLabel) setScore(s => s+1); }} onNext={() => { if(currentQ < quizData.length -1) setCurrentQ(c => c+1); else { if(user && activeSubject) { const finalScore = Object.keys(answers).reduce((acc, qIdx) => { return acc + (answers[qIdx] === quizData[qIdx].correctAnswer ? 1 : 0); }, 0); handleTopicComplete(finalScore, quizData.length); } else if(user) { const finalScore = Object.keys(answers).reduce((acc, qIdx) => { return acc + (answers[qIdx] === quizData[qIdx].correctAnswer ? 1 : 0); }, 0); saveQuizResult(finalScore, quizData.length); } setView('result'); } }} onQuit={() => setView(activeSubject ? 'subject-detail' : 'home')} />)}
                     {view === 'result' && (<ResultView score={score} total={quizData.length} user={user} quizData={quizData} userAnswers={answers} onRetry={() => setView('home')} onOpenLogin={() => setShowLoginModal(true)} saveResult={null} isReviewMode={false} />)}
