@@ -1,7 +1,6 @@
 const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 
 module.exports = async (req, res) => {
-    // CORS Headers
     res.setHeader('Access-Control-Allow-Credentials', true);
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
@@ -14,19 +13,19 @@ module.exports = async (req, res) => {
 
     if (!syllabusText) return res.status(400).json({ error: "No syllabus text provided" });
 
-    // Prompt to extract topics
+    // 🔥 UPDATED PROMPT: Ask for Hierarchy (Units -> Topics)
     const prompt = `
-    Analyze the following syllabus text and extract a flat list of distinct study topics or chapters.
-    Ignore generic terms like "Introduction" or "Conclusion" unless specific.
+    Analyze the following syllabus text and structure it into Units and their corresponding Topics.
     
     SYLLABUS:
     """
-    ${syllabusText.substring(0, 10000)}
+    ${syllabusText.substring(0, 15000)}
     """
 
     OUTPUT REQUIREMENTS:
-    - Return ONLY a raw JSON array of strings.
-    - Example: ["Kinematics", "Laws of Motion", "Thermodynamics"]
+    - Return ONLY a raw JSON array of objects.
+    - Format: [{"unit": "Unit 1 Name", "topics": ["Topic A", "Topic B"]}, {"unit": "Unit 2 Name", "topics": ["Topic C"]}]
+    - If no clear units are found, group everything under "General Unit".
     - No markdown, no code blocks.
     `;
 
@@ -40,11 +39,10 @@ module.exports = async (req, res) => {
         const data = await response.json();
         let text = data.candidates[0].content.parts[0].text;
         
-        // Clean up JSON
         text = text.replace(/```json/g, '').replace(/```/g, '').trim();
-        const topics = JSON.parse(text);
+        const syllabusData = JSON.parse(text); // Expected: [{ unit: "...", topics: [...] }]
 
-        res.status(200).json({ topics });
+        res.status(200).json({ syllabusData });
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: "Failed to parse syllabus" });

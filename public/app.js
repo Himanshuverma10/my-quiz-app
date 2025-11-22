@@ -1,20 +1,30 @@
-const { useState, useRef, useEffect } = React;
+const { useState, useRef, useEffect, useMemo } = React;
 
 // 🔥 Auth & DB Variables
 const auth = window.auth;
 const db = window.db;
 
-// Helper: Check if option is correct
+// --- HELPERS ---
+const getLabel = (index) => String.fromCharCode(65 + index);
+
+const cleanOptionText = (text) => {
+    if(!text) return "";
+    // Removes "A)", "1.", etc from start of text
+    return text.replace(/^[A-Da-d0-9]+[\)\.]\s*/, "").trim();
+};
+
+// Check Answer Logic (Strict Match)
 const isOptionCorrect = (option, correctKey) => {
     if (!option || !correctKey) return false;
     const cleanOpt = option.trim();
     const cleanKey = correctKey.trim();
+    // Direct Match or Prefix Match
     if (cleanOpt === cleanKey) return true;
     if (cleanOpt.startsWith(cleanKey + ")") || cleanOpt.startsWith(cleanKey + ".")) return true;
     return false;
 };
 
-// --- Icons ---
+// --- ICONS ---
 const Icons = {
     Brain: () => <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"/></svg>,
     Google: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>,
@@ -37,14 +47,7 @@ const Icons = {
     Lightbulb: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 12 3 4.65 4.65 0 0 0 7.5 11.5c0 1.16.52 2.17 1.41 2.5"/></svg>
 };
 
-// --- HELPERS ---
-const getLabel = (index) => String.fromCharCode(65 + index);
-const cleanOptionText = (text) => {
-    if(!text) return "";
-    return text.replace(/^[A-Da-d0-9]+[\)\.]\s*/, "").trim();
-};
-
-// --- ADD SUBJECT MODAL ---
+// --- ADD SUBJECT MODAL (Syllabus Parser) ---
 const AddSubjectModal = ({ onClose, onSave }) => {
     const [name, setName] = useState('');
     const [syllabus, setSyllabus] = useState('');
@@ -86,7 +89,8 @@ const AddSubjectModal = ({ onClose, onSave }) => {
             });
             const data = await response.json();
             if(data.error) throw new Error(data.error);
-            onSave(name, data.topics);
+            // Expecting structure: [{ unit: "Unit 1", topics: ["A", "B"] }]
+            onSave(name, data.syllabusData);
         } catch (err) { alert("Error parsing syllabus: " + err.message); setParsing(false); }
     };
 
@@ -255,30 +259,100 @@ const SubjectDashboard = ({ user, subjects, onSelectSubject, onAddSubject, onOpe
     );
 };
 
-const SubjectDetail = ({ subject, topics, onBack, onStartTopic }) => (
-    <div className="w-full max-w-4xl mx-auto fade-in p-4">
-        <button onClick={onBack} className="mb-6 text-slate-500 hover:text-indigo-500 flex items-center gap-2 font-bold text-sm"><Icons.ArrowLeft /> Back to Dashboard</button>
-        <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 shadow-xl border border-slate-200 dark:border-slate-700 mb-6">
-            <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">{subject.name}</h1>
-            <p className="text-slate-500 dark:text-slate-400">Select a topic to start a quiz.</p>
-        </div>
-        <div className="space-y-3">
-            {topics.map((topic, index) => (
-                <div key={index} className="flex items-center justify-between p-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-indigo-400 transition">
-                    <div className="flex items-center gap-4">
-                        <span className="text-slate-300 font-mono font-bold text-sm">{(index + 1).toString().padStart(2, '0')}</span>
-                        <h4 className={`font-bold ${topic.completed ? 'text-green-600 dark:text-green-400 line-through opacity-70' : 'text-slate-800 dark:text-slate-200'}`}>{topic.name}</h4>
-                    </div>
-                    {topic.completed ? (
-                        <div className="flex items-center gap-2 text-green-600 dark:text-green-400 text-sm font-bold bg-green-50 dark:bg-green-900/20 px-3 py-1 rounded-lg"><Icons.CheckCircle /> Score: {topic.score}%</div>
-                    ) : (
-                        <button onClick={() => onStartTopic(topic.name)} className="px-4 py-2 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg font-bold text-sm hover:bg-indigo-600 hover:text-white transition flex items-center gap-2"><Icons.Play /> Start Quiz</button>
-                    )}
+// --- 🔥 UPDATED SUBJECT DETAIL (Unit Grouping & Learn Buttons) ---
+const SubjectDetail = ({ subject, topics, onBack, onStartTopic, onLearnTopic }) => {
+    const [selectedUnit, setSelectedUnit] = useState(null);
+
+    // Group Topics by Unit
+    const units = useMemo(() => {
+        const groups = {};
+        topics.forEach(t => {
+            const uName = t.unit || "General Topics";
+            if(!groups[uName]) groups[uName] = { name: uName, total: 0, completed: 0, topics: [] };
+            groups[uName].topics.push(t);
+            groups[uName].total++;
+            if(t.completed) groups[uName].completed++;
+        });
+        return Object.values(groups);
+    }, [topics]);
+
+    // View A: List of Units
+    if (!selectedUnit) {
+        return (
+            <div className="w-full max-w-4xl mx-auto fade-in p-4">
+                <button onClick={onBack} className="mb-6 text-slate-500 hover:text-indigo-500 flex items-center gap-2 font-bold text-sm">
+                    <Icons.ArrowLeft /> Back to Subjects
+                </button>
+                
+                <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 shadow-xl border border-slate-200 dark:border-slate-700 mb-8">
+                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">{subject.name}</h1>
+                    <p className="text-slate-500 dark:text-slate-400">Select a unit to explore topics.</p>
                 </div>
-            ))}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {units.map((unit) => (
+                        <div key={unit.name} onClick={() => setSelectedUnit(unit)} className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-indigo-500 dark:hover:border-[#10b981] transition group">
+                            <div className="flex justify-between items-start mb-4">
+                                <div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl text-indigo-600 dark:text-indigo-400 group-hover:scale-110 transition"><Icons.Book /></div>
+                                <span className="text-xs font-bold text-slate-400">{unit.topics.length} Topics</span>
+                            </div>
+                            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">{unit.name}</h3>
+                            
+                            {/* Unit Progress Bar */}
+                            <div className="w-full h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                                <div className="h-full bg-indigo-500 dark:bg-[#10b981]" style={{ width: `${(unit.completed / unit.total) * 100}%` }}></div>
+                            </div>
+                            <p className="text-xs text-slate-400 mt-2 text-right">{unit.completed} / {unit.total} Done</p>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
+    }
+
+    // View B: Topics in Selected Unit
+    return (
+        <div className="w-full max-w-4xl mx-auto fade-in p-4">
+            <button onClick={() => setSelectedUnit(null)} className="mb-6 text-slate-500 hover:text-indigo-500 flex items-center gap-2 font-bold text-sm">
+                <Icons.ArrowLeft /> Back to Units
+            </button>
+            
+            <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 shadow-xl border border-slate-200 dark:border-slate-700 mb-6">
+                <span className="text-xs font-bold text-indigo-500 uppercase tracking-widest mb-2 block">{subject.name}</span>
+                <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">{selectedUnit.name}</h1>
+                <p className="text-slate-500 dark:text-slate-400">Select a topic to Learn or Quiz.</p>
+            </div>
+
+            <div className="space-y-3">
+                {selectedUnit.topics.map((topic, index) => (
+                    <div key={index} className="flex flex-col md:flex-row md:items-center justify-between p-5 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-indigo-400 transition gap-4">
+                        <div className="flex items-center gap-4">
+                            <span className="text-slate-300 font-mono font-bold text-sm">{(index + 1).toString().padStart(2, '0')}</span>
+                            <h4 className={`font-bold text-lg ${topic.completed ? 'text-green-600 dark:text-green-400' : 'text-slate-800 dark:text-slate-200'}`}>{topic.name}</h4>
+                        </div>
+                        
+                        <div className="flex gap-2 w-full md:w-auto">
+                            {/* Learn Button */}
+                            <button onClick={() => onLearnTopic(topic.name, subject.name)} className="flex-1 md:flex-none px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-lg font-bold text-sm hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition flex items-center justify-center gap-2">
+                                <Icons.Lightbulb /> Learn
+                            </button>
+                            
+                            {topic.completed ? (
+                                <div className="flex items-center gap-2 text-green-600 dark:text-green-400 text-sm font-bold bg-green-50 dark:bg-green-900/20 px-4 py-2 rounded-lg whitespace-nowrap">
+                                    <Icons.CheckCircle /> {topic.score}%
+                                </div>
+                            ) : (
+                                <button onClick={() => onStartTopic(topic.name)} className="flex-1 md:flex-none px-4 py-2 bg-indigo-600 text-white rounded-lg font-bold text-sm hover:bg-indigo-700 transition flex items-center justify-center gap-2">
+                                    <Icons.Play /> Quiz
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                ))}
+            </div>
         </div>
-    </div>
-);
+    );
+};
 
 // --- TAB 3: HISTORY DASHBOARD ---
 const HistoryDashboard = ({ user, onOpenLogin, onSelectHistory }) => {
@@ -334,12 +408,15 @@ const HistoryDashboard = ({ user, onOpenLogin, onSelectHistory }) => {
     );
 };
 
-// --- 🔥 TAB 4: UPDATED LEARN DASHBOARD (With Auto-Fetch Topics) ---
-const LearnDashboard = ({ user, subjects, onStartTest, onOpenLogin }) => {
+// --- TAB 4: LEARN DASHBOARD ---
+const LearnDashboard = ({ user, subjects, initialData, onStartTest, onOpenLogin }) => {
     const [mode, setMode] = useState('topic');
     const [topic, setTopic] = useState('');
     const [selectedSubject, setSelectedSubject] = useState('');
-    const [availableTopics, setAvailableTopics] = useState([]); // New State for Topics
+    const [selectedUnit, setSelectedUnit] = useState('');
+    const [allSubjectTopics, setAllSubjectTopics] = useState([]);
+    const [availableUnits, setAvailableUnits] = useState([]);
+    const [filteredTopics, setFilteredTopics] = useState([]);
     const [isFetchingTopics, setIsFetchingTopics] = useState(false);
     const [lesson, setLesson] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -347,28 +424,42 @@ const LearnDashboard = ({ user, subjects, onStartTest, onOpenLogin }) => {
     const [sourceText, setSourceText] = useState('');
     const fileRef = useRef(null);
 
-    // Handle Subject Change & Fetch Topics
+    useEffect(() => {
+        if(initialData && initialData.topic) {
+            setMode('topic');
+            setTopic(initialData.topic);
+            if(initialData.subject) setSelectedSubject(initialData.subject);
+        }
+    }, [initialData]);
+
     const handleSubjectChange = async (e) => {
         const subName = e.target.value;
         setSelectedSubject(subName);
-        setTopic(''); // Reset topic
-        setAvailableTopics([]); // Clear old topics
-
+        setSelectedUnit(''); setTopic(''); setAllSubjectTopics([]); setAvailableUnits([]); setFilteredTopics([]);
         if (!subName) return;
-
-        // Find the subject object to get its ID
         const subObj = subjects.find(s => s.name === subName);
         if (subObj) {
             setIsFetchingTopics(true);
             try {
-                const snap = await db.collection('users').doc(user.uid)
-                    .collection('subjects').doc(subObj.id)
-                    .collection('topics').get();
-                const fetchedTopics = snap.docs.map(doc => doc.data().name);
-                setAvailableTopics(fetchedTopics);
+                const snap = await db.collection('users').doc(user.uid).collection('subjects').doc(subObj.id).collection('topics').get();
+                const fetchedData = snap.docs.map(doc => doc.data());
+                setAllSubjectTopics(fetchedData);
+                const units = [...new Set(fetchedData.map(item => item.unit).filter(Boolean))];
+                setAvailableUnits(units);
+                if(units.length === 0) setFilteredTopics(fetchedData.map(t => t.name));
             } catch (err) { console.error("Error fetching topics:", err); }
             setIsFetchingTopics(false);
         }
+    };
+
+    const handleUnitChange = (e) => {
+        const unit = e.target.value;
+        setSelectedUnit(unit);
+        setTopic('');
+        if(unit) {
+            const filtered = allSubjectTopics.filter(t => t.unit === unit).map(t => t.name);
+            setFilteredTopics(filtered);
+        } else { setFilteredTopics([]); }
     };
 
     const handleFile = async (e) => {
@@ -386,9 +477,7 @@ const LearnDashboard = ({ user, subjects, onStartTest, onOpenLogin }) => {
                     const textContent = await page.getTextContent();
                     text += textContent.items.map(item => item.str).join(' ') + "\n";
                 }
-            } else {
-                text = await file.text();
-            }
+            } else { text = await file.text(); }
             setSourceText(text);
         } catch (err) { alert("Error reading file: " + err.message); }
     };
@@ -396,17 +485,11 @@ const LearnDashboard = ({ user, subjects, onStartTest, onOpenLogin }) => {
     const handleGenerateLesson = async () => {
         if (mode === 'topic' && !topic) return alert("Please enter a topic");
         if (mode === 'file' && !sourceText) return alert("Please upload a file or paste text");
-        
         setLoading(true);
         try {
             const response = await fetch('/api/generate-lesson', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    topic: mode === 'topic' ? topic : null, 
-                    subjectContext: mode === 'topic' ? selectedSubject : null,
-                    sourceText: mode === 'file' ? sourceText : null
-                })
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ topic: mode === 'topic' ? topic : null, subjectContext: mode === 'topic' ? selectedSubject : null, sourceText: mode === 'file' ? sourceText : null })
             });
             const data = await response.json();
             if (data.error) throw new Error(data.error);
@@ -414,16 +497,14 @@ const LearnDashboard = ({ user, subjects, onStartTest, onOpenLogin }) => {
         } catch (e) { alert(e.message); } finally { setLoading(false); }
     };
 
-    if (!user) {
-        return (
-            <div className="w-full max-w-2xl mx-auto text-center py-20 fade-in">
-                <div className="w-24 h-24 bg-slate-200 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-6"><Icons.Lock /></div>
-                <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">Learning Locked</h1>
-                <p className="text-slate-500 dark:text-slate-400 mb-8">Login to access AI tutoring from topics and documents.</p>
-                <button onClick={onOpenLogin} className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg hover:bg-indigo-700 transition">Login to Unlock</button>
-            </div>
-        );
-    }
+    if (!user) return (
+        <div className="w-full max-w-2xl mx-auto text-center py-20 fade-in">
+            <div className="w-24 h-24 bg-slate-200 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-6"><Icons.Lock /></div>
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">Learning Locked</h1>
+            <p className="text-slate-500 dark:text-slate-400 mb-8">Login to access AI tutoring from topics and documents.</p>
+            <button onClick={onOpenLogin} className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg hover:bg-indigo-700 transition">Login to Unlock</button>
+        </div>
+    );
 
     return (
         <div className="w-full max-w-4xl mx-auto fade-in p-4">
@@ -434,13 +515,11 @@ const LearnDashboard = ({ user, subjects, onStartTest, onOpenLogin }) => {
                         <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Start Learning</h1>
                         <p className="text-slate-500 dark:text-slate-400">Get an instant AI-curated lesson from a topic or your own material.</p>
                     </div>
-
                     <div className="space-y-6 max-w-lg mx-auto">
                         <div className="flex gap-4 mb-6">
                             <button onClick={() => setMode('topic')} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all border ${mode === 'topic' ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400'}`}>By Topic</button>
                             <button onClick={() => setMode('file')} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all border ${mode === 'file' ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400'}`}>From File/Text</button>
                         </div>
-
                         {mode === 'topic' ? (
                             <>
                                 {subjects.length > 0 && (
@@ -452,23 +531,25 @@ const LearnDashboard = ({ user, subjects, onStartTest, onOpenLogin }) => {
                                         </select>
                                     </div>
                                 )}
+                                {availableUnits.length > 0 && (
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Select Unit</label>
+                                        <select value={selectedUnit} onChange={handleUnitChange} className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:outline-none focus:border-indigo-500">
+                                            <option value="">-- Select Unit --</option>
+                                            {availableUnits.map((u, i) => <option key={i} value={u}>{u}</option>)}
+                                        </select>
+                                    </div>
+                                )}
                                 <div>
-                                    <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
-                                        {selectedSubject && availableTopics.length > 0 ? "Select Unit/Topic" : "Topic Name"}
-                                    </label>
-                                    
-                                    {selectedSubject && availableTopics.length > 0 ? (
-                                        isFetchingTopics ? (
-                                            <div className="p-3 text-slate-500 text-sm"><Icons.Loader /> Loading topics...</div>
-                                        ) : (
-                                            <select value={topic} onChange={e => setTopic(e.target.value)} className="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:outline-none focus:border-indigo-500 text-lg">
-                                                <option value="">-- Select Topic --</option>
-                                                {availableTopics.map((t, i) => <option key={i} value={t}>{t}</option>)}
+                                    <label className="block text-xs font-bold text-slate-400 uppercase mb-2">{selectedSubject && (filteredTopics.length > 0 || availableUnits.length > 0) ? "Select Topic" : "Topic Name"}</label>
+                                    {selectedSubject && (filteredTopics.length > 0 || availableUnits.length > 0) ? (
+                                        isFetchingTopics ? <div className="p-3 text-slate-500 text-sm"><Icons.Loader /> Loading...</div> : (
+                                            <select value={topic} onChange={e => setTopic(e.target.value)} disabled={availableUnits.length > 0 && !selectedUnit} className="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:outline-none focus:border-indigo-500 text-lg disabled:opacity-50">
+                                                <option value="">{availableUnits.length > 0 && !selectedUnit ? "-- Select Unit First --" : "-- Select Topic --"}</option>
+                                                {filteredTopics.map((t, i) => <option key={i} value={t}>{t}</option>)}
                                             </select>
                                         )
-                                    ) : (
-                                        <input value={topic} onChange={e => setTopic(e.target.value)} placeholder="e.g. Newton's Laws..." className="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:outline-none focus:border-indigo-500 text-lg" />
-                                    )}
+                                    ) : (<input value={topic} onChange={e => setTopic(e.target.value)} placeholder="e.g. Newton's Laws..." className="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:outline-none focus:border-indigo-500 text-lg" />)}
                                 </div>
                             </>
                         ) : (
@@ -487,7 +568,6 @@ const LearnDashboard = ({ user, subjects, onStartTest, onOpenLogin }) => {
                                 </div>
                             </>
                         )}
-
                         <button onClick={handleGenerateLesson} disabled={loading} className="w-full py-4 rounded-xl bg-indigo-600 text-white font-bold shadow-lg hover:bg-indigo-700 transition flex justify-center items-center gap-2">
                             {loading ? <><Icons.Loader /> Generating Lesson...</> : "Start Learning"}
                         </button>
@@ -511,12 +591,11 @@ const LearnDashboard = ({ user, subjects, onStartTest, onOpenLogin }) => {
     );
 };
 
-// --- QUIZ VIEW ---
+// --- QUIZ & RESULT VIEW (Same as before) ---
 const QuizView = ({ quizData, currentQ, answers, onAnswer, onNext, onQuit }) => {
     const q = quizData[currentQ];
     const answered = answers[currentQ];
     const progress = ((currentQ + 1) / quizData.length) * 100;
-
     return (
         <div className="w-full max-w-2xl mx-auto fade-in">
             <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-700">
@@ -524,28 +603,16 @@ const QuizView = ({ quizData, currentQ, answers, onAnswer, onNext, onQuit }) => 
                 <div className="p-8 md:p-10">
                     <div className="flex justify-between items-center mb-6"><span className="text-[10px] font-bold text-indigo-500 dark:text-[#10b981] bg-indigo-50 dark:bg-[#10b981]/10 px-3 py-1 rounded-full uppercase tracking-widest">Q{currentQ + 1} / {quizData.length}</span><button onClick={onQuit} className="text-slate-400 hover:text-red-500 text-xs font-bold uppercase tracking-widest">Quit</button></div>
                     <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-8 leading-snug">{q.question}</h2>
-                    
                     <div className="space-y-3">
                         {q.options.map((optText, i) => {
-                            const label = getLabel(i); 
-                            const content = cleanOptionText(optText);
-                            const isSel = answers[currentQ] === label;
-                            const isRight = label === q.correctAnswer; 
+                            const label = getLabel(i); const content = cleanOptionText(optText);
+                            const isSel = answers[currentQ] === label; const isRight = label === q.correctAnswer; 
                             let containerStyle = "w-full flex items-stretch rounded-xl overflow-hidden border-2 transition-all duration-200 cursor-pointer ";
                             let labelStyle = "w-12 flex items-center justify-center font-bold text-lg border-r-2 ";
                             let textStyle = "flex-1 p-4 text-left font-medium text-sm flex items-center ";
-                            
                             if (answered) {
-                                if (isRight) {
-                                    containerStyle += "border-green-500 bg-green-50 dark:bg-green-900/20"; labelStyle += "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 border-green-500"; textStyle += "text-green-800 dark:text-green-300";
-                                } else if (isSel) {
-                                    containerStyle += "border-red-500 bg-red-50 dark:bg-red-900/20"; labelStyle += "bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400 border-red-500"; textStyle += "text-red-800 dark:text-red-300";
-                                } else {
-                                    containerStyle += "border-slate-200 dark:border-slate-700 opacity-50"; labelStyle += "bg-slate-100 dark:bg-slate-700 border-slate-200 dark:border-slate-700 text-slate-500"; textStyle += "text-slate-500 dark:text-slate-400";
-                                }
-                            } else {
-                                containerStyle += "border-slate-200 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-[#10b981] bg-white dark:bg-slate-800"; labelStyle += "bg-slate-100 dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 group-hover:text-indigo-500"; textStyle += "text-slate-700 dark:text-slate-300";
-                            }
+                                if (isRight) { containerStyle += "border-green-500 bg-green-50 dark:bg-green-900/20"; labelStyle += "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 border-green-500"; textStyle += "text-green-800 dark:text-green-300"; } else if (isSel) { containerStyle += "border-red-500 bg-red-50 dark:bg-red-900/20"; labelStyle += "bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400 border-red-500"; textStyle += "text-red-800 dark:text-red-300"; } else { containerStyle += "border-slate-200 dark:border-slate-700 opacity-50"; labelStyle += "bg-slate-100 dark:bg-slate-700 border-slate-200 dark:border-slate-700 text-slate-500"; textStyle += "text-slate-500 dark:text-slate-400"; }
+                            } else { containerStyle += "border-slate-200 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-[#10b981] bg-white dark:bg-slate-800"; labelStyle += "bg-slate-100 dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 group-hover:text-indigo-500"; textStyle += "text-slate-700 dark:text-slate-300"; }
                             return (<div key={i} onClick={() => !answered && onAnswer(label)} className={containerStyle}><div className={labelStyle}>{label}</div><div className={textStyle}>{content}</div></div>);
                         })}
                     </div>
@@ -557,18 +624,10 @@ const QuizView = ({ quizData, currentQ, answers, onAnswer, onNext, onQuit }) => 
     );
 };
 
-// --- RESULT VIEW ---
 const ResultView = ({ score, total, user, quizData, userAnswers, onRetry, onOpenLogin, saveResult, isReviewMode }) => {
     const percentage = Math.round((score / total) * 100);
     const [saved, setSaved] = useState(false);
-
-    useEffect(() => {
-        if (user && !saved && !isReviewMode && saveResult) {
-            saveResult(score, total);
-            setSaved(true);
-        }
-    }, [user]);
-
+    useEffect(() => { if (user && !saved && !isReviewMode && saveResult) { saveResult(score, total); setSaved(true); } }, [user]);
     return (
         <div className="w-full max-w-3xl mx-auto text-center fade-in pb-10">
             <div className="bg-white dark:bg-slate-800 rounded-3xl p-10 shadow-2xl border border-slate-200 dark:border-slate-700 transition-colors duration-300 mb-8">
@@ -577,19 +636,14 @@ const ResultView = ({ score, total, user, quizData, userAnswers, onRetry, onOpen
                 <p className="text-slate-500 dark:text-slate-400 mb-8">You scored {score} out of {total}</p>
                 <div className="space-y-3 max-w-md mx-auto">
                     <button onClick={onRetry} className="w-full py-4 bg-indigo-600 dark:bg-[#10b981] text-white dark:text-slate-900 rounded-xl font-bold shadow-lg hover:opacity-90 transition">{isReviewMode ? "Back to History" : "Create New Quiz"}</button>
-                    {!user && !isReviewMode && (
-                        <button onClick={onOpenLogin} className="w-full py-4 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-200 dark:hover:bg-slate-600 transition flex items-center justify-center gap-2">Save My Progress <Icons.ArrowRight /></button>
-                    )}
+                    {!user && !isReviewMode && <button onClick={onOpenLogin} className="w-full py-4 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-200 dark:hover:bg-slate-600 transition flex items-center justify-center gap-2">Save My Progress <Icons.ArrowRight /></button>}
                     {user && !isReviewMode && (<div className="text-xs text-green-500 font-bold uppercase tracking-widest mt-4">✓ Result Saved</div>)}
                 </div>
             </div>
             <div className="text-left space-y-6">
                 <h3 className="text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest text-xs text-center mb-6">Detailed Analysis</h3>
                 {quizData.map((q, index) => {
-                    const userLabel = userAnswers[index]; 
-                    const correctLabel = q.correctAnswer;
-                    const isCorrect = userLabel === correctLabel;
-
+                    const userLabel = userAnswers[index]; const correctLabel = q.correctAnswer; const isCorrect = userLabel === correctLabel;
                     return (
                         <div key={index} className="bg-white dark:bg-slate-800 rounded-2xl p-6 border border-slate-200 dark:border-slate-700 shadow-sm">
                             <div className="flex items-start gap-4">
@@ -598,13 +652,11 @@ const ResultView = ({ score, total, user, quizData, userAnswers, onRetry, onOpen
                                     <h4 className="text-lg font-bold text-slate-900 dark:text-white mb-3">{q.question}</h4>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                                         <div className={`p-3 rounded-lg text-sm border flex gap-3 items-center ${isCorrect ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-900 text-green-800 dark:text-green-400' : 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-900 text-red-800 dark:text-red-400'}`}>
-                                            <div className="font-bold px-2 py-1 rounded bg-white/50 dark:bg-black/20">{userLabel || "-"}</div>
-                                            <span className="font-medium opacity-90">Your Answer</span>
+                                            <div className="font-bold px-2 py-1 rounded bg-white/50 dark:bg-black/20">{userLabel || "-"}</div> <span className="font-medium opacity-90">Your Answer</span>
                                         </div>
                                         {!isCorrect && (
                                              <div className="p-3 rounded-lg text-sm bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 flex gap-3 items-center">
-                                                <div className="font-bold px-2 py-1 rounded bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-400">{correctLabel}</div>
-                                                <span className="font-medium opacity-90">Correct Answer</span>
+                                                <div className="font-bold px-2 py-1 rounded bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-400">{correctLabel}</div> <span className="font-medium opacity-90">Correct Answer</span>
                                             </div>
                                         )}
                                     </div>
@@ -634,6 +686,7 @@ const App = () => {
     const [activeTopics, setActiveTopics] = useState([]);
     const [showAddModal, setShowAddModal] = useState(false);
     const [showLoginModal, setShowLoginModal] = useState(false);
+    const [learnInitData, setLearnInitData] = useState(null);
 
     const [quizData, setQuizData] = useState([]);
     const [currentQ, setCurrentQ] = useState(0);
@@ -646,10 +699,7 @@ const App = () => {
     
     useEffect(() => {
         if(!auth) return;
-        auth.onAuthStateChanged((u) => {
-            setUser(u);
-            if(u) { setShowLoginModal(false); fetchSubjects(u.uid); }
-        });
+        auth.onAuthStateChanged((u) => { setUser(u); if(u) { setShowLoginModal(false); fetchSubjects(u.uid); } });
     }, []);
 
     const toggleTheme = () => setTheme(prev => prev === 'dark' ? 'light' : 'dark');
@@ -662,13 +712,18 @@ const App = () => {
     };
 
     const handleCreateSubject = async (name, topicsList) => {
-        setShowAddModal(false);
-        if(!user) return;
+        setShowAddModal(false); if(!user) return;
         const subRef = await db.collection('users').doc(user.uid).collection('subjects').add({ name: name, totalTopics: topicsList.length, completed: 0, createdAt: new Date() });
         const batch = db.batch();
-        topicsList.forEach(topicName => { const ref = subRef.collection('topics').doc(); batch.set(ref, { name: topicName, completed: false, score: 0 }); });
-        await batch.commit();
-        fetchSubjects(user.uid);
+        topicsList.forEach(unitObj => {
+            unitObj.topics.forEach(topicName => {
+                const ref = subRef.collection('topics').doc();
+                batch.set(ref, { name: topicName, unit: unitObj.unit, completed: false, score: 0 });
+            });
+        });
+        const totalCount = topicsList.reduce((acc, u) => acc + u.topics.length, 0);
+        await subRef.update({ totalTopics: totalCount });
+        await batch.commit(); fetchSubjects(user.uid);
     };
 
     const handleSelectSubject = async (sub) => {
@@ -680,16 +735,7 @@ const App = () => {
 
     const saveQuizResult = async (s, t) => {
         if (!user) return;
-        try {
-            await db.collection('users').doc(user.uid).collection('history').add({ 
-                topic: currentTopicName || "Unknown", 
-                score: s, 
-                total: t, 
-                date: new Date(),
-                quizData: quizData, 
-                userAnswers: answers 
-            });
-        } catch (err) { console.error("Error saving result:", err); }
+        try { await db.collection('users').doc(user.uid).collection('history').add({ topic: currentTopicName || "Unknown", score: s, total: t, date: new Date(), quizData: quizData, userAnswers: answers }); } catch (err) { console.error(err); }
     };
 
     const handleTopicComplete = async (score, total) => {
@@ -706,11 +752,14 @@ const App = () => {
     };
 
     const handleSelectHistory = (item) => {
-        if(!item.quizData || !item.userAnswers) return alert("Detailed data not available for this old quiz.");
-        setQuizData(item.quizData);
-        setAnswers(item.userAnswers);
-        setScore(item.score);
-        setView('history-review'); 
+        if(!item.quizData || !item.userAnswers) return alert("Detailed data not available.");
+        setQuizData(item.quizData); setAnswers(item.userAnswers); setScore(item.score); setView('history-review'); 
+    };
+
+    const handleLearnTopic = (topicName, subjectName) => {
+        setLearnInitData({ topic: topicName, subject: subjectName });
+        setActiveTab('learn');
+        setView('home');
     };
 
     useEffect(() => { if (!loading) return; const texts = ["Scanning Knowledge Base...", "Formulating Questions...", "Finalizing Quiz..."]; let i = 0; const interval = setInterval(() => { setProgressText(texts[i % texts.length]); i++; }, 800); return () => clearInterval(interval); }, [loading]);
@@ -718,10 +767,7 @@ const App = () => {
     const generateQuiz = async ({ mode, topic, sourceText, difficulty, numQuestions }) => {
         setLoading(true); setError(''); setCurrentTopicName(mode === 'topic' ? topic : "Uploaded File");
         try {
-            const response = await fetch('/api/generate-quiz', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ topic: mode === 'topic' ? topic : "File", sourceText: mode === 'file' ? sourceText : null, difficulty, numQuestions })
-            });
+            const response = await fetch('/api/generate-quiz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ topic: mode === 'topic' ? topic : "File", sourceText: mode === 'file' ? sourceText : null, difficulty, numQuestions }) });
             const data = await response.json();
             if (data.error) throw new Error(data.error);
             setQuizData(data); setCurrentQ(0); setScore(0); setAnswers({}); setView('quiz');
@@ -731,103 +777,24 @@ const App = () => {
     return (
         <div className={theme}>
             <div className="min-h-screen bg-slate-100 dark:bg-[#0f172a] text-slate-900 dark:text-white transition-colors duration-300 font-sans relative flex flex-col">
-                
-                {/* Header */}
                 <div className="px-6 py-4 flex justify-between items-center bg-white dark:bg-slate-900/50 backdrop-blur-md sticky top-0 z-40 border-b border-slate-200 dark:border-slate-700">
-                     <div className="flex items-center gap-8">
-                        <div className="flex items-center gap-2 font-bold text-xl tracking-tight"><span className="text-indigo-600 dark:text-[#00ffc8]"><Icons.Brain /></span> GenQuiz AI</div>
-                        {/* DESKTOP TABS */}
-                        <div className="hidden md:flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
-                            <button onClick={() => { setActiveTab('generator'); setView('home'); }} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${activeTab === 'generator' ? 'bg-white dark:bg-[#00ffc8] text-slate-900 shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}>Quick Quiz</button>
-                            <button onClick={() => { setActiveTab('subjects'); setView('home'); }} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${activeTab === 'subjects' ? 'bg-white dark:bg-[#00ffc8] text-slate-900 shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}>My Subjects</button>
-                            <button onClick={() => { setActiveTab('history'); setView('home'); }} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${activeTab === 'history' ? 'bg-white dark:bg-[#00ffc8] text-slate-900 shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}>History</button>
-                            <button onClick={() => { setActiveTab('learn'); setView('home'); }} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${activeTab === 'learn' ? 'bg-white dark:bg-[#00ffc8] text-slate-900 shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}>Learn</button>
-                        </div>
-                     </div>
-                     <div className="flex items-center gap-3">
-                        <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition">{theme === 'dark' ? <Icons.Sun /> : <Icons.Moon />}</button>
-                        {user ? (
-                            <div className="flex items-center gap-3 pl-4 border-l border-slate-200 dark:border-slate-700">
-                                <img src={user.photoURL} className="w-8 h-8 rounded-full border border-slate-300 dark:border-slate-600" />
-                                <button onClick={handleLogout} className="text-xs font-bold text-red-500 hover:text-red-600">Logout</button>
-                            </div>
-                        ) : (
-                            <button onClick={() => setShowLoginModal(true)} className="text-sm font-bold text-indigo-600 dark:text-[#00ffc8] hover:underline">Login</button>
-                        )}
-                     </div>
+                     <div className="flex items-center gap-8"><div className="flex items-center gap-2 font-bold text-xl tracking-tight"><span className="text-indigo-600 dark:text-[#00ffc8]"><Icons.Brain /></span> GenQuiz AI</div><div className="hidden md:flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl"><button onClick={() => { setActiveTab('generator'); setView('home'); }} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${activeTab === 'generator' ? 'bg-white dark:bg-[#00ffc8] text-slate-900 shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}>Quick Quiz</button><button onClick={() => { setActiveTab('subjects'); setView('home'); }} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${activeTab === 'subjects' ? 'bg-white dark:bg-[#00ffc8] text-slate-900 shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}>My Subjects</button><button onClick={() => { setActiveTab('history'); setView('home'); }} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${activeTab === 'history' ? 'bg-white dark:bg-[#00ffc8] text-slate-900 shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}>History</button><button onClick={() => { setActiveTab('learn'); setView('home'); }} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${activeTab === 'learn' ? 'bg-white dark:bg-[#00ffc8] text-slate-900 shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}>Learn</button></div></div>
+                     <div className="flex items-center gap-3"><button onClick={toggleTheme} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition">{theme === 'dark' ? <Icons.Sun /> : <Icons.Moon />}</button>{user ? (<div className="flex items-center gap-3 pl-4 border-l border-slate-200 dark:border-slate-700"><img src={user.photoURL} className="w-8 h-8 rounded-full border border-slate-300 dark:border-slate-600" /><button onClick={handleLogout} className="text-xs font-bold text-red-500 hover:text-red-600">Logout</button></div>) : (<button onClick={() => setShowLoginModal(true)} className="text-sm font-bold text-indigo-600 dark:text-[#00ffc8] hover:underline">Login</button>)}</div>
                 </div>
-
-                {/* MOBILE TABS */}
                 <div className="md:hidden px-4 py-3 bg-white dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-700 sticky top-[73px] z-30 flex gap-2 justify-center shadow-sm overflow-x-auto">
                      <button onClick={() => { setActiveTab('generator'); setView('home'); }} className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-bold transition text-center ${activeTab === 'generator' ? 'bg-indigo-100 dark:bg-[#00ffc8]/10 text-indigo-600 dark:text-[#00ffc8] ring-1 ring-indigo-500 dark:ring-[#00ffc8]' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>Quick Quiz</button>
                      <button onClick={() => { setActiveTab('subjects'); setView('home'); }} className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-bold transition text-center ${activeTab === 'subjects' ? 'bg-indigo-100 dark:bg-[#00ffc8]/10 text-indigo-600 dark:text-[#00ffc8] ring-1 ring-indigo-500 dark:ring-[#00ffc8]' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>Subjects</button>
                      <button onClick={() => { setActiveTab('history'); setView('home'); }} className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-bold transition text-center ${activeTab === 'history' ? 'bg-indigo-100 dark:bg-[#00ffc8]/10 text-indigo-600 dark:text-[#00ffc8] ring-1 ring-indigo-500 dark:ring-[#00ffc8]' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>History</button>
                      <button onClick={() => { setActiveTab('learn'); setView('home'); }} className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-bold transition text-center ${activeTab === 'learn' ? 'bg-indigo-100 dark:bg-[#00ffc8]/10 text-indigo-600 dark:text-[#00ffc8] ring-1 ring-indigo-500 dark:ring-[#00ffc8]' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>Learn</button>
                 </div>
-
-                {/* Content */}
                 <div className="flex-1 p-4 md:p-8 flex flex-col items-center">
                     {showAddModal && <AddSubjectModal onClose={() => setShowAddModal(false)} onSave={handleCreateSubject} />}
                     {showLoginModal && <LoginModal onLogin={handleLogin} onClose={() => setShowLoginModal(false)} />}
-
-                    {view === 'home' && (
-                        activeTab === 'generator' ? (
-                            <QuickGenerator onGenerate={generateQuiz} loading={loading} error={error} progressText={progressText} />
-                        ) : activeTab === 'subjects' ? (
-                            <SubjectDashboard user={user} subjects={subjects} onSelectSubject={handleSelectSubject} onAddSubject={() => setShowAddModal(true)} onOpenLogin={() => setShowLoginModal(true)} />
-                        ) : activeTab === 'history' ? (
-                            <HistoryDashboard user={user} onOpenLogin={() => setShowLoginModal(true)} onSelectHistory={handleSelectHistory} />
-                        ) : (
-                            <LearnDashboard user={user} subjects={subjects} onStartTest={(lessonText) => generateQuiz({ mode: 'file', sourceText: lessonText, topic: 'Lesson Quiz', difficulty: 'Medium', numQuestions: 5 })} onOpenLogin={() => setShowLoginModal(true)} />
-                        )
-                    )}
-
-                    {view === 'subject-detail' && <SubjectDetail subject={activeSubject} topics={activeTopics} onBack={() => setView('home')} onStartTopic={generateQuiz} />}
-                    
-                    {view === 'quiz' && (
-                         <QuizView quizData={quizData} currentQ={currentQ} answers={answers} 
-                            onAnswer={(label) => {
-                                const correctLabel = quizData[currentQ].correctAnswer;
-                                setAnswers({...answers, [currentQ]: label}); 
-                                if(label === correctLabel) setScore(s => s+1); 
-                            }}
-                            onNext={() => {
-                                if(currentQ < quizData.length -1) setCurrentQ(c => c+1);
-                                else {
-                                    if(user && activeSubject) {
-                                        const finalScore = Object.keys(answers).reduce((acc, qIdx) => {
-                                            return acc + (answers[qIdx] === quizData[qIdx].correctAnswer ? 1 : 0);
-                                        }, 0);
-                                        handleTopicComplete(finalScore, quizData.length);
-                                    } else if(user) {
-                                        const finalScore = Object.keys(answers).reduce((acc, qIdx) => {
-                                            return acc + (answers[qIdx] === quizData[qIdx].correctAnswer ? 1 : 0);
-                                        }, 0);
-                                        saveQuizResult(finalScore, quizData.length);
-                                    }
-                                    setView('result');
-                                }
-                            }}
-                            onQuit={() => setView(activeSubject ? 'subject-detail' : 'home')}
-                         />
-                    )}
-
-                    {view === 'result' && (
-                        <ResultView score={score} total={quizData.length} user={user} quizData={quizData} userAnswers={answers}
-                            onRetry={() => setView('home')}
-                            onOpenLogin={() => setShowLoginModal(true)}
-                            saveResult={null} 
-                            isReviewMode={false}
-                        />
-                    )}
-
-                    {view === 'history-review' && (
-                        <ResultView score={score} total={quizData.length} user={user} quizData={quizData} userAnswers={answers}
-                            onRetry={() => { setActiveTab('history'); setView('home'); }}
-                            saveResult={null}
-                            isReviewMode={true}
-                        />
-                    )}
+                    {view === 'home' && (activeTab === 'generator' ? (<QuickGenerator onGenerate={generateQuiz} loading={loading} error={error} progressText={progressText} />) : activeTab === 'subjects' ? (<SubjectDashboard user={user} subjects={subjects} onSelectSubject={handleSelectSubject} onAddSubject={() => setShowAddModal(true)} onOpenLogin={() => setShowLoginModal(true)} />) : activeTab === 'history' ? (<HistoryDashboard user={user} onOpenLogin={() => setShowLoginModal(true)} onSelectHistory={handleSelectHistory} />) : (<LearnDashboard user={user} subjects={subjects} initialData={learnInitData} onStartTest={(lessonText) => generateQuiz({ mode: 'file', sourceText: lessonText, topic: 'Lesson Quiz', difficulty: 'Medium', numQuestions: 5 })} onOpenLogin={() => setShowLoginModal(true)} />))}
+                    {view === 'subject-detail' && <SubjectDetail subject={activeSubject} topics={activeTopics} onBack={() => setView('home')} onStartTopic={generateQuiz} onLearnTopic={handleLearnTopic} />}
+                    {view === 'quiz' && (<QuizView quizData={quizData} currentQ={currentQ} answers={answers} onAnswer={(label) => { const correctLabel = quizData[currentQ].correctAnswer; setAnswers({...answers, [currentQ]: label}); if(label === correctLabel) setScore(s => s+1); }} onNext={() => { if(currentQ < quizData.length -1) setCurrentQ(c => c+1); else { if(user && activeSubject) { const finalScore = Object.keys(answers).reduce((acc, qIdx) => { return acc + (answers[qIdx] === quizData[qIdx].correctAnswer ? 1 : 0); }, 0); handleTopicComplete(finalScore, quizData.length); } else if(user) { const finalScore = Object.keys(answers).reduce((acc, qIdx) => { return acc + (answers[qIdx] === quizData[qIdx].correctAnswer ? 1 : 0); }, 0); saveQuizResult(finalScore, quizData.length); } setView('result'); } }} onQuit={() => setView(activeSubject ? 'subject-detail' : 'home')} />)}
+                    {view === 'result' && (<ResultView score={score} total={quizData.length} user={user} quizData={quizData} userAnswers={answers} onRetry={() => setView('home')} onOpenLogin={() => setShowLoginModal(true)} saveResult={null} isReviewMode={false} />)}
+                    {view === 'history-review' && (<ResultView score={score} total={quizData.length} user={user} quizData={quizData} userAnswers={answers} onRetry={() => { setActiveTab('history'); setView('home'); }} saveResult={null} isReviewMode={true} />)}
                 </div>
             </div>
         </div>
