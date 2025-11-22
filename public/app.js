@@ -33,7 +33,8 @@ const Icons = {
     Play: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>,
     ArrowLeft: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>,
     Zap: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>,
-    Clock: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    Clock: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
+    Lightbulb: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 12 3 4.65 4.65 0 0 0 7.5 11.5c0 1.16.52 2.17 1.41 2.5"/></svg>
 };
 
 // --- HELPERS ---
@@ -309,7 +310,6 @@ const HistoryDashboard = ({ user, onOpenLogin, onSelectHistory }) => {
     return (
         <div className="w-full max-w-4xl mx-auto fade-in p-4">
             <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">Quiz History</h1>
-            
             {loading ? <div className="text-center p-10"><Icons.Loader /></div> : history.length === 0 ? (
                 <div className="text-center py-20 bg-white dark:bg-slate-800 rounded-3xl border border-dashed border-slate-300 dark:border-slate-700">
                     <div className="text-slate-300 mb-4 flex justify-center"><Icons.Clock /></div>
@@ -328,6 +328,146 @@ const HistoryDashboard = ({ user, onOpenLogin, onSelectHistory }) => {
                             <button onClick={() => onSelectHistory(item)} className="px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg text-sm font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/30 hover:text-indigo-600 dark:hover:text-indigo-400 transition">Review</button>
                         </div>
                     ))}
+                </div>
+            )}
+        </div>
+    );
+};
+
+// --- 🔥 TAB 4: UPDATED LEARN DASHBOARD ---
+const LearnDashboard = ({ user, subjects, onStartTest, onOpenLogin }) => {
+    const [mode, setMode] = useState('topic'); // 'topic' or 'file'
+    const [topic, setTopic] = useState('');
+    const [selectedSubject, setSelectedSubject] = useState('');
+    const [lesson, setLesson] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [fileName, setFileName] = useState('');
+    const [sourceText, setSourceText] = useState('');
+    const fileRef = useRef(null);
+
+    // Handle File Upload for Learn Mode
+    const handleFile = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setFileName(file.name);
+        try {
+            let text = "";
+            if (file.type === 'application/pdf') {
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                const maxPages = Math.min(pdf.numPages, 15); 
+                for (let i = 1; i <= maxPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const textContent = await page.getTextContent();
+                    text += textContent.items.map(item => item.str).join(' ') + "\n";
+                }
+            } else {
+                text = await file.text();
+            }
+            setSourceText(text);
+        } catch (err) { alert("Error reading file: " + err.message); }
+    };
+
+    const handleGenerateLesson = async () => {
+        if (mode === 'topic' && !topic) return alert("Please enter a topic");
+        if (mode === 'file' && !sourceText) return alert("Please upload a file or paste text");
+        
+        setLoading(true);
+        try {
+            const response = await fetch('/api/generate-lesson', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    topic: mode === 'topic' ? topic : null, 
+                    subjectContext: mode === 'topic' ? selectedSubject : null,
+                    sourceText: mode === 'file' ? sourceText : null
+                })
+            });
+            const data = await response.json();
+            if (data.error) throw new Error(data.error);
+            setLesson(data.lesson);
+        } catch (e) { alert(e.message); } finally { setLoading(false); }
+    };
+
+    // 🔒 Guest Lock Logic
+    if (!user) {
+        return (
+            <div className="w-full max-w-2xl mx-auto text-center py-20 fade-in">
+                <div className="w-24 h-24 bg-slate-200 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-6"><Icons.Lock /></div>
+                <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">Learning Locked</h1>
+                <p className="text-slate-500 dark:text-slate-400 mb-8">Login to access AI tutoring from topics and documents.</p>
+                <button onClick={onOpenLogin} className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg hover:bg-indigo-700 transition">Login to Unlock</button>
+            </div>
+        );
+    }
+
+    return (
+        <div className="w-full max-w-4xl mx-auto fade-in p-4">
+            {!lesson ? (
+                <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 md:p-12 shadow-2xl border border-slate-200 dark:border-slate-700">
+                    <div className="text-center mb-8">
+                        <div className="w-16 h-16 bg-indigo-100 dark:bg-indigo-900/20 rounded-2xl flex items-center justify-center mx-auto mb-4 text-indigo-600 dark:text-indigo-400"><Icons.Lightbulb /></div>
+                        <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Start Learning</h1>
+                        <p className="text-slate-500 dark:text-slate-400">Get an instant AI-curated lesson from a topic or your own material.</p>
+                    </div>
+
+                    <div className="space-y-6 max-w-lg mx-auto">
+                        {/* Mode Selector */}
+                        <div className="flex gap-4 mb-6">
+                            <button onClick={() => setMode('topic')} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all border ${mode === 'topic' ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400'}`}>By Topic</button>
+                            <button onClick={() => setMode('file')} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all border ${mode === 'file' ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400'}`}>From File/Text</button>
+                        </div>
+
+                        {mode === 'topic' ? (
+                            <>
+                                {subjects.length > 0 && (
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Subject Context (Optional)</label>
+                                        <select value={selectedSubject} onChange={e => setSelectedSubject(e.target.value)} className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:outline-none focus:border-indigo-500">
+                                            <option value="">General Topic</option>
+                                            {subjects.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                                        </select>
+                                    </div>
+                                )}
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Topic Name</label>
+                                    <input value={topic} onChange={e => setTopic(e.target.value)} placeholder="e.g. Newton's Laws..." className="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:outline-none focus:border-indigo-500" />
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Upload Document</label>
+                                    <div onClick={() => fileRef.current.click()} className="w-full p-4 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition mb-4">
+                                        <div className="text-slate-400 dark:text-slate-500 mb-2"><Icons.Upload /></div>
+                                        <p className="text-sm font-medium text-slate-600 dark:text-slate-300">{fileName || "Click to Upload PDF/TXT"}</p>
+                                        <input type="file" ref={fileRef} className="hidden" accept=".pdf,.txt" onChange={handleFile} />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Or Paste Text Content</label>
+                                    <textarea value={sourceText} onChange={e => setSourceText(e.target.value)} className="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 h-32 focus:outline-none focus:border-indigo-500" placeholder="Paste your study material here..." />
+                                </div>
+                            </>
+                        )}
+
+                        <button onClick={handleGenerateLesson} disabled={loading} className="w-full py-4 rounded-xl bg-indigo-600 text-white font-bold shadow-lg hover:bg-indigo-700 transition flex justify-center items-center gap-2">
+                            {loading ? <><Icons.Loader /> Generating Lesson...</> : "Start Learning"}
+                        </button>
+                    </div>
+                </div>
+            ) : (
+                <div className="fade-in">
+                    <button onClick={() => setLesson(null)} className="mb-6 text-slate-500 hover:text-indigo-500 flex items-center gap-2 font-bold text-sm"><Icons.ArrowLeft /> Back</button>
+                    <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 md:p-12 shadow-xl border border-slate-200 dark:border-slate-700 mb-8 prose dark:prose-invert max-w-none whitespace-pre-wrap">
+                        <div dangerouslySetInnerHTML={{ __html: lesson.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br/>') }} />
+                    </div>
+                    <div className="text-center">
+                        <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4">Ready to test your knowledge?</h3>
+                        <button onClick={() => onStartTest(lesson)} className="px-8 py-4 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold shadow-lg transition flex items-center gap-2 mx-auto">
+                            <Icons.Brain /> Generate Quiz on this Lesson
+                        </button>
+                    </div>
                 </div>
             )}
         </div>
@@ -555,15 +695,14 @@ const App = () => {
         <div className={theme}>
             <div className="min-h-screen bg-slate-100 dark:bg-[#0f172a] text-slate-900 dark:text-white transition-colors duration-300 font-sans relative flex flex-col">
                 
-                {/* Header */}
                 <div className="px-6 py-4 flex justify-between items-center bg-white dark:bg-slate-900/50 backdrop-blur-md sticky top-0 z-40 border-b border-slate-200 dark:border-slate-700">
                      <div className="flex items-center gap-8">
                         <div className="flex items-center gap-2 font-bold text-xl tracking-tight"><span className="text-indigo-600 dark:text-[#00ffc8]"><Icons.Brain /></span> GenQuiz AI</div>
-                        {/* DESKTOP TABS */}
                         <div className="hidden md:flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
                             <button onClick={() => { setActiveTab('generator'); setView('home'); }} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${activeTab === 'generator' ? 'bg-white dark:bg-[#00ffc8] text-slate-900 shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}>Quick Quiz</button>
                             <button onClick={() => { setActiveTab('subjects'); setView('home'); }} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${activeTab === 'subjects' ? 'bg-white dark:bg-[#00ffc8] text-slate-900 shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}>My Subjects</button>
                             <button onClick={() => { setActiveTab('history'); setView('home'); }} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${activeTab === 'history' ? 'bg-white dark:bg-[#00ffc8] text-slate-900 shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}>History</button>
+                            <button onClick={() => { setActiveTab('learn'); setView('home'); }} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${activeTab === 'learn' ? 'bg-white dark:bg-[#00ffc8] text-slate-900 shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}>Learn</button>
                         </div>
                      </div>
                      <div className="flex items-center gap-3">
@@ -579,14 +718,13 @@ const App = () => {
                      </div>
                 </div>
 
-                {/* 🔥 MOBILE TABS (Shown below header on mobile) */}
-                <div className="md:hidden px-4 py-3 bg-white dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-700 sticky top-[73px] z-30 flex gap-2 justify-center shadow-sm">
-                     <button onClick={() => { setActiveTab('generator'); setView('home'); }} className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold transition text-center ${activeTab === 'generator' ? 'bg-indigo-100 dark:bg-[#00ffc8]/10 text-indigo-600 dark:text-[#00ffc8] ring-1 ring-indigo-500 dark:ring-[#00ffc8]' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>Quick Quiz</button>
-                     <button onClick={() => { setActiveTab('subjects'); setView('home'); }} className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold transition text-center ${activeTab === 'subjects' ? 'bg-indigo-100 dark:bg-[#00ffc8]/10 text-indigo-600 dark:text-[#00ffc8] ring-1 ring-indigo-500 dark:ring-[#00ffc8]' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>My Subjects</button>
-                     <button onClick={() => { setActiveTab('history'); setView('home'); }} className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold transition text-center ${activeTab === 'history' ? 'bg-indigo-100 dark:bg-[#00ffc8]/10 text-indigo-600 dark:text-[#00ffc8] ring-1 ring-indigo-500 dark:ring-[#00ffc8]' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>History</button>
+                <div className="md:hidden px-4 py-3 bg-white dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-700 sticky top-[73px] z-30 flex gap-2 justify-center shadow-sm overflow-x-auto">
+                     <button onClick={() => { setActiveTab('generator'); setView('home'); }} className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-bold transition text-center ${activeTab === 'generator' ? 'bg-indigo-100 dark:bg-[#00ffc8]/10 text-indigo-600 dark:text-[#00ffc8] ring-1 ring-indigo-500 dark:ring-[#00ffc8]' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>Quick Quiz</button>
+                     <button onClick={() => { setActiveTab('subjects'); setView('home'); }} className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-bold transition text-center ${activeTab === 'subjects' ? 'bg-indigo-100 dark:bg-[#00ffc8]/10 text-indigo-600 dark:text-[#00ffc8] ring-1 ring-indigo-500 dark:ring-[#00ffc8]' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>Subjects</button>
+                     <button onClick={() => { setActiveTab('history'); setView('home'); }} className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-bold transition text-center ${activeTab === 'history' ? 'bg-indigo-100 dark:bg-[#00ffc8]/10 text-indigo-600 dark:text-[#00ffc8] ring-1 ring-indigo-500 dark:ring-[#00ffc8]' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>History</button>
+                     <button onClick={() => { setActiveTab('learn'); setView('home'); }} className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-bold transition text-center ${activeTab === 'learn' ? 'bg-indigo-100 dark:bg-[#00ffc8]/10 text-indigo-600 dark:text-[#00ffc8] ring-1 ring-indigo-500 dark:ring-[#00ffc8]' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>Learn</button>
                 </div>
 
-                {/* Content */}
                 <div className="flex-1 p-4 md:p-8 flex flex-col items-center">
                     {showAddModal && <AddSubjectModal onClose={() => setShowAddModal(false)} onSave={handleCreateSubject} />}
                     {showLoginModal && <LoginModal onLogin={handleLogin} onClose={() => setShowLoginModal(false)} />}
@@ -596,8 +734,10 @@ const App = () => {
                             <QuickGenerator onGenerate={generateQuiz} loading={loading} error={error} progressText={progressText} />
                         ) : activeTab === 'subjects' ? (
                             <SubjectDashboard user={user} subjects={subjects} onSelectSubject={handleSelectSubject} onAddSubject={() => setShowAddModal(true)} onOpenLogin={() => setShowLoginModal(true)} />
-                        ) : (
+                        ) : activeTab === 'history' ? (
                             <HistoryDashboard user={user} onOpenLogin={() => setShowLoginModal(true)} onSelectHistory={handleSelectHistory} />
+                        ) : (
+                            <LearnDashboard user={user} subjects={subjects} onStartTest={(lessonText) => generateQuiz({ mode: 'file', sourceText: lessonText, topic: 'Lesson Quiz', difficulty: 'Medium', numQuestions: 5 })} onOpenLogin={() => setShowLoginModal(true)} />
                         )
                     )}
 
