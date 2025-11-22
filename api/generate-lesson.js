@@ -13,51 +13,30 @@ module.exports = async (req, res) => {
 
     if (!topic && !sourceText) return res.status(400).json({ error: "Topic or Source Text is required" });
 
+    // 🔥 ALWAYS USE PRO FOR LEARNING (Better Quality)
+    const modelVersion = 'gemini-2.5-pro';
+
     let prompt = "";
 
     if (sourceText) {
-        // MODE A: Explain Provided Material
-        const truncatedText = sourceText.substring(0, 15000); // Limit text
+        const truncatedText = sourceText.substring(0, 20000); // Pro can handle more context
         prompt = `
-        You are an expert tutor. Your task is to analyze the provided SOURCE MATERIAL and create a structured, easy-to-understand study lesson based *strictly* on it.
-        
-        SOURCE MATERIAL:
-        """
-        ${truncatedText}
-        """
-
-        TASK:
-        Refine this content into a clear study guide.
-        
-        STRUCTURE:
-        1. **Overview**: What is this material about?
-        2. **Detailed Breakdown**: Explain the key concepts found in the text clearly.
-        3. **Key Takeaways**: Bullet points of the most important facts/rules from the text.
-        4. **Summary**: A concluding sentence.
-
-        OUTPUT FORMAT:
-        Return Markdown formatted text. Make it engaging.
+        You are an expert tutor. Analyze the SOURCE MATERIAL and create a structured study lesson.
+        SOURCE MATERIAL: """${truncatedText}"""
+        STRUCTURE: Overview, Detailed Breakdown, Key Takeaways, Summary.
+        OUTPUT: Markdown format. Engaging tone.
         `;
     } else {
-        // MODE B: Generate from Topic
         const context = subjectContext ? `Context: This is part of the subject "${subjectContext}".` : "";
         prompt = `
-        You are an expert tutor. Write a comprehensive, easy-to-understand study lesson about: "${topic}".
-        ${context}
-
-        STRUCTURE:
-        1. **Introduction**: Brief overview.
-        2. **Core Concepts**: Explain the main ideas clearly with examples.
-        3. **Key Facts**: Bullet points of important data/rules.
-        4. **Summary**: A one-sentence conclusion.
-
-        OUTPUT FORMAT:
-        Return Markdown formatted text.
+        You are an expert tutor. Write a comprehensive study lesson about: "${topic}". ${context}
+        STRUCTURE: Introduction, Core Concepts (with examples), Key Facts, Summary.
+        OUTPUT: Markdown format.
         `;
     }
 
     try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelVersion}:generateContent?key=${apiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
@@ -69,7 +48,6 @@ module.exports = async (req, res) => {
         res.status(200).json({ lesson });
 
     } catch (error) {
-        console.error(error);
         res.status(500).json({ error: "Failed to generate lesson." });
     }
 };
