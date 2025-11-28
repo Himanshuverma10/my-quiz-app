@@ -1,56 +1,85 @@
 const { useState, useRef, useEffect, useMemo } = React;
 
-// 🔥 Auth & DB Variables
+// ----------------------------------------------------------
+// 1. GLOBAL VARIABLES & HELPERS
+// ----------------------------------------------------------
+
 const auth = window.auth;
 const db = window.db;
 
-// --- 1. HELPER FUNCTIONS ---
-
+/**
+ * Converts index (0, 1, 2) to Label (A, B, C).
+ */
 const getLabel = (index) => String.fromCharCode(65 + index);
 
+/**
+ * Cleans "A) Option" to just "Option".
+ */
 const cleanOptionText = (text) => {
     if (!text) return "";
     return text.replace(/^[A-Da-d0-9]+[\)\.]\s*/, "").trim();
 };
 
+/**
+ * Checks if the selected option matches the correct key strictly.
+ * Supports checking "A" against "A" or "A) Text".
+ */
 const isOptionCorrect = (option, correctKey) => {
     if (!option || !correctKey) return false;
     const cleanOpt = option.trim();
     const cleanKey = correctKey.trim();
+
+    // Direct Match
     if (cleanOpt === cleanKey) return true;
+    
+    // Prefix Match (e.g. "A)" matches "A")
     if (cleanOpt.startsWith(cleanKey + ")") || cleanOpt.startsWith(cleanKey + ".")) return true;
+    
     return false;
 };
 
+/**
+ * Formats date for History grouping (Today, Yesterday, Date).
+ */
 const formatDateGroup = (dateObj) => {
     if (!dateObj) return "Recent";
     const date = dateObj.toDate ? dateObj.toDate() : new Date(dateObj);
     const today = new Date();
     const yesterday = new Date();
     yesterday.setDate(today.getDate() - 1);
-    
+
     if (date.toDateString() === today.toDateString()) return "Today";
     if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
 
-// Wikipedia Image Fetcher
+/**
+ * Fetches an image from Wikipedia API for the Learn Mode.
+ */
 const fetchWikiImage = async (query) => {
-    if(!query) return null;
+    if (!query) return null;
     try {
+        // 1. Search for the page
         const searchRes = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${query}&format=json&origin=*`);
         const searchData = await searchRes.json();
-        if(!searchData.query.search.length) return null;
+        if (!searchData.query.search.length) return null;
+
+        // 2. Get the image from the top result
         const title = searchData.query.search[0].title;
         const imgRes = await fetch(`https://en.wikipedia.org/w/api.php?action=query&titles=${title}&prop=pageimages&format=json&pithumbsize=500&origin=*`);
         const imgData = await imgRes.json();
+        
         const pages = imgData.query.pages;
         const pageId = Object.keys(pages)[0];
         return pages[pageId].thumbnail ? pages[pageId].thumbnail.source : null;
-    } catch (e) { return null; }
+    } catch (e) {
+        return null;
+    }
 };
 
-// --- 2. ICONS ---
+// ----------------------------------------------------------
+// 2. ICONS COMPONENT
+// ----------------------------------------------------------
 const Icons = {
     Brain: () => <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"/></svg>,
     Google: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>,
@@ -80,7 +109,10 @@ const Icons = {
     Device: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
 };
 
-// --- 3. MODALS ---
+
+// ----------------------------------------------------------
+// 3. MODAL COMPONENTS
+// ----------------------------------------------------------
 
 const EditSubjectModal = ({ user, subject, onClose, onUpdate }) => {
     const [name, setName] = useState(subject.name);
@@ -100,43 +132,65 @@ const EditSubjectModal = ({ user, subject, onClose, onUpdate }) => {
     }, [subject]);
 
     const handleDeleteTopic = async (topicId) => {
-        if(!confirm("Delete this topic?")) return;
+        if (!confirm("Delete this topic?")) return;
         await db.collection('users').doc(user.uid).collection('subjects').doc(subject.id).collection('topics').doc(topicId).delete();
         setTopics(prev => prev.filter(t => t.id !== topicId));
     };
 
     const handleFile = async (e) => {
-        const file = e.target.files?.[0]; if (!file) return;
+        const file = e.target.files?.[0];
+        if (!file) return;
         setParsing(true);
         try {
             let text = "";
             if (file.type === 'application/pdf') {
                 const arrayBuffer = await file.arrayBuffer();
                 const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-                const maxPages = Math.min(pdf.numPages, 15); 
+                const maxPages = Math.min(pdf.numPages, 15);
                 for (let i = 1; i <= maxPages; i++) {
                     const page = await pdf.getPage(i);
                     const textContent = await page.getTextContent();
                     text += textContent.items.map(item => item.str).join(' ') + "\n";
                 }
-            } else { text = await file.text(); }
-            setSyllabus(text); 
-        } catch (err) { alert(err.message); } finally { setParsing(false); }
+            } else {
+                text = await file.text();
+            }
+            setSyllabus(text);
+        } catch (err) {
+            alert(err.message);
+        } finally {
+            setParsing(false);
+        }
     };
 
     const handleSave = async () => {
         setParsing(true);
-        if(name !== subject.name) {
+        // Update Name
+        if (name !== subject.name) {
             await db.collection('users').doc(user.uid).collection('subjects').doc(subject.id).update({ name });
         }
-        if(syllabus) {
+        // Update Content (If added)
+        if (syllabus) {
             try {
-                const response = await fetch('/api/parse-syllabus', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ syllabusText: syllabus }) });
+                const response = await fetch('/api/parse-syllabus', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ syllabusText: syllabus })
+                });
                 const data = await response.json();
-                if(data.error) throw new Error(data.error);
+                if (data.error) throw new Error(data.error);
+
                 const batch = db.batch();
                 const subRef = db.collection('users').doc(user.uid).collection('subjects').doc(subject.id);
                 let newCount = 0;
+
+                // Track Token Usage
+                if (data.usage) {
+                    await db.collection('users').doc(user.uid).set({ 
+                        tokenUsage: firebase.firestore.FieldValue.increment(data.usage.totalTokenCount || 0) 
+                    }, { merge: true });
+                }
+
                 data.syllabusData.forEach(unitObj => {
                     unitObj.topics.forEach(tName => {
                         const ref = subRef.collection('topics').doc();
@@ -146,7 +200,9 @@ const EditSubjectModal = ({ user, subject, onClose, onUpdate }) => {
                 });
                 await batch.commit();
                 await subRef.update({ totalTopics: subject.totalTopics + newCount });
-            } catch(err) { alert("Error processing new content: " + err.message); }
+            } catch (err) {
+                alert("Error processing new content: " + err.message);
+            }
         }
         setParsing(false);
         onUpdate();
@@ -157,9 +213,10 @@ const EditSubjectModal = ({ user, subject, onClose, onUpdate }) => {
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm fade-in p-4">
             <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 max-w-2xl w-full shadow-2xl border border-slate-200 dark:border-slate-700 max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200">
                 <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">Edit Subject</h2>
+                
                 <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Subject Name</label>
                 <input value={name} onChange={e => setName(e.target.value)} className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 mb-6 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all" />
-                
+
                 <div className="mb-6">
                     <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Add New Content (Optional)</label>
                     <div className="flex gap-2 mb-2">
@@ -213,7 +270,9 @@ const AddSubjectModal = ({ onClose, onSave }) => {
                     const textContent = await page.getTextContent();
                     text += textContent.items.map(item => item.str).join(' ') + "\n";
                 }
-            } else { text = await file.text(); }
+            } else {
+                text = await file.text();
+            }
             setSyllabus(text); 
         } catch (err) { alert(err.message); } finally { setParsing(false); }
     };
@@ -228,8 +287,11 @@ const AddSubjectModal = ({ onClose, onSave }) => {
                 body: JSON.stringify({ syllabusText: syllabus })
             });
             const data = await response.json();
-            if(data.error) throw new Error(data.error);
-            onSave(name, data.syllabusData);
+            if (data.error) throw new Error(data.error);
+            
+            // 🔥 Pass Usage Data to Save function
+            onSave(name, data.syllabusData, data.usage);
+            
         } catch (err) { alert("Error: " + err.message); setParsing(false); }
     };
 
@@ -271,7 +333,9 @@ const LoginModal = ({ onLogin, onClose }) => (
     </div>
 );
 
-// --- 4. VIEW COMPONENTS ---
+// ----------------------------------------------------------
+// 4. TAB COMPONENTS (DASHBOARDS)
+// ----------------------------------------------------------
 
 const ProfileDashboard = ({ user, onUpdateProfile }) => {
     const [isEditing, setIsEditing] = useState(false);
@@ -283,6 +347,7 @@ const ProfileDashboard = ({ user, onUpdateProfile }) => {
         const fetchUserData = async () => {
             const snap = await db.collection('users').doc(user.uid).get();
             setUserData(snap.data());
+            
             const sessionSnap = await db.collection('users').doc(user.uid).collection('sessions').orderBy('lastSeen', 'desc').get();
             setActiveSessions(sessionSnap.docs.map(doc => doc.data()));
         };
@@ -290,9 +355,9 @@ const ProfileDashboard = ({ user, onUpdateProfile }) => {
     }, [user]);
 
     const handleSaveName = async () => {
-        if(!newName.trim()) return;
+        if (!newName.trim()) return;
         await user.updateProfile({ displayName: newName });
-        await db.collection('users').doc(user.uid).update({ displayName: newName }); 
+        await db.collection('users').doc(user.uid).update({ displayName: newName });
         setIsEditing(false);
         onUpdateProfile();
     };
@@ -302,6 +367,7 @@ const ProfileDashboard = ({ user, onUpdateProfile }) => {
 
     return (
         <div className="w-full max-w-4xl mx-auto fade-in p-4 space-y-6">
+            {/* Identity Card */}
             <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 md:p-8 shadow-lg border border-slate-200 dark:border-slate-700 flex flex-col md:flex-row items-center gap-8 hover:scale-[1.01] transition-transform duration-300 ease-out">
                 <div className="relative">
                     <img src={user.photoURL} className="w-24 h-24 rounded-full border-4 border-indigo-500 shadow-lg" />
@@ -323,11 +389,12 @@ const ProfileDashboard = ({ user, onUpdateProfile }) => {
                 </div>
             </div>
 
+            {/* Stats Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="bg-indigo-600 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden hover:scale-[1.02] transition-transform duration-300 hover:shadow-indigo-500/30">
                     <div className="relative z-10">
                         <div className="text-indigo-200 text-xs font-bold uppercase mb-1">Total Tokens Used</div>
-                        <div className="text-3xl font-black flex items-center gap-2"><Icons.Cpu /> {userData?.tokenUsage?.totalTokenCount?.toLocaleString() || 0}</div>
+                        <div className="text-3xl font-black flex items-center gap-2"><Icons.Cpu /> {userData?.tokenUsage?.toLocaleString() || 0}</div>
                     </div>
                     <div className="absolute -right-4 -bottom-4 text-indigo-500 opacity-30"><Icons.Cpu /></div>
                 </div>
@@ -341,6 +408,7 @@ const ProfileDashboard = ({ user, onUpdateProfile }) => {
                 </div>
             </div>
 
+            {/* Security Card */}
             <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 md:p-8 shadow-lg border border-slate-200 dark:border-slate-700">
                 <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2"><Icons.Shield /> Active Sessions</h3>
                 <div className="space-y-4">
@@ -370,12 +438,12 @@ const ProfileDashboard = ({ user, onUpdateProfile }) => {
 };
 
 const QuickGenerator = ({ onGenerate, loading, error, progressText }) => {
-    const [mode, setMode] = useState('topic');
-    const [topic, setTopic] = useState('');
-    const [difficulty, setDifficulty] = useState('Medium');
-    const [numQuestions, setNumQuestions] = useState(5);
-    const [fileName, setFileName] = useState('');
-    const [sourceText, setSourceText] = useState('');
+    const [mode, setMode] = useState('topic'); 
+    const [topic, setTopic] = useState(''); 
+    const [difficulty, setDifficulty] = useState('Medium'); 
+    const [numQuestions, setNumQuestions] = useState(5); 
+    const [fileName, setFileName] = useState(''); 
+    const [sourceText, setSourceText] = useState(''); 
     const fileRef = useRef(null);
 
     const handleFile = async (e) => {
@@ -393,6 +461,7 @@ const QuickGenerator = ({ onGenerate, loading, error, progressText }) => {
                     <div className="p-8 md:p-10 space-y-8">
                         <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2"><Icons.Zap /> Quick Quiz</h2>
                         
+                        {/* Mode Selection */}
                         <div>
                             <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 block">Select Mode</label>
                             <div className="flex gap-4">
@@ -401,6 +470,7 @@ const QuickGenerator = ({ onGenerate, loading, error, progressText }) => {
                             </div>
                         </div>
 
+                        {/* Input Section */}
                         <div>
                             <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 block">{mode === 'topic' ? 'Enter Topic' : 'Upload Document'}</label>
                             {mode === 'topic' ? (
@@ -414,7 +484,8 @@ const QuickGenerator = ({ onGenerate, loading, error, progressText }) => {
                             )}
                         </div>
 
-                         <div>
+                        {/* Difficulty */}
+                        <div>
                             <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 block">Difficulty</label>
                             <div className="flex gap-2">
                                 {['Easy', 'Medium', 'Hard'].map((d) => (
@@ -423,11 +494,13 @@ const QuickGenerator = ({ onGenerate, loading, error, progressText }) => {
                             </div>
                         </div>
 
+                        {/* Questions */}
                         <div>
                              <div className="flex justify-between mb-2"><label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Questions: {numQuestions}</label></div>
                             <input type="range" min="3" max="15" value={numQuestions} onChange={(e) => setNumQuestions(parseInt(e.target.value))} />
                         </div>
 
+                        {/* Submit */}
                         <div>
                             <button onClick={() => onGenerate({ mode, topic, sourceText, difficulty, numQuestions })} disabled={loading} className="w-full py-4 rounded-xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-[#10b981] dark:hover:bg-[#059669] dark:text-slate-900 shadow-lg transition-all active:scale-95 disabled:opacity-50 flex justify-center items-center gap-2 hover:shadow-indigo-500/30">
                                 {loading ? <><Icons.Loader /> Generating...</> : "Generate Quiz"}
@@ -437,6 +510,7 @@ const QuickGenerator = ({ onGenerate, loading, error, progressText }) => {
                         </div>
                     </div>
 
+                    {/* Decorative Side */}
                     <div className="hidden md:flex bg-slate-50 dark:bg-slate-900/50 p-10 flex-col justify-center items-center relative overflow-hidden border-l border-slate-200 dark:border-slate-700">
                         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-[0.05] dark:opacity-[0.1]"></div>
                         <div className="relative z-10 text-center max-w-xs">
@@ -503,7 +577,6 @@ const SubjectDashboard = ({ user, subjects, onSelectSubject, onAddSubject, onDel
     );
 };
 
-// --- SUBJECT DETAIL (Units View) ---
 const SubjectDetail = ({ subject, topics, onBack, onStartTopic, onLearnTopic }) => {
     const [selectedUnit, setSelectedUnit] = useState(null);
 
@@ -754,11 +827,7 @@ const LearnDashboard = ({ user, subjects, initialData, onStartTest, onOpenLogin 
         if (mode === 'file' && !sourceText) return alert("Please upload a file or paste text");
         setLoading(true);
         setWikiImage(null);
-
-        // 1. Fetch Wiki Image in parallel
         if (mode === 'topic') fetchWikiImage(topic).then(img => setWikiImage(img));
-
-        // 2. Generate Content
         try {
             const response = await fetch('/api/generate-lesson', {
                 method: 'POST',
@@ -772,6 +841,14 @@ const LearnDashboard = ({ user, subjects, initialData, onStartTest, onOpenLogin 
             const data = await response.json();
             if (data.error) throw new Error(data.error);
             setLesson(data.lesson);
+            
+            // 🔥 TRACK TOKENS for Learning
+            if(data.usage && user) {
+                 await db.collection('users').doc(user.uid).set({ 
+                     tokenUsage: firebase.firestore.FieldValue.increment(data.usage.totalTokenCount || 0) 
+                 }, { merge: true });
+            }
+
         } catch (e) { alert(e.message); } finally { setLoading(false); }
     };
 
@@ -875,8 +952,8 @@ const LearnDashboard = ({ user, subjects, initialData, onStartTest, onOpenLogin 
                          </div>
                     )}
 
-                    <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 md:p-12 shadow-xl border border-slate-200 dark:border-slate-700 mb-8">
-                         <div className="markdown-content" dangerouslySetInnerHTML={{ __html: marked.parse(lesson) }} />
+                    <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 md:p-12 shadow-xl border border-slate-200 dark:border-slate-700 mb-8 prose dark:prose-invert max-w-none whitespace-pre-wrap">
+                        <div className="markdown-content" dangerouslySetInnerHTML={{ __html: marked.parse(lesson) }} />
                     </div>
                     
                     <div className="text-center">
@@ -891,7 +968,7 @@ const LearnDashboard = ({ user, subjects, initialData, onStartTest, onOpenLogin 
     );
 };
 
-// --- QUIZ & RESULT VIEW (Same as before) ---
+// --- QUIZ & RESULT VIEW ---
 const QuizView = ({ quizData, currentQ, answers, onAnswer, onNext, onQuit }) => {
     const q = quizData[currentQ];
     const answered = answers[currentQ];
@@ -1049,10 +1126,18 @@ const App = () => {
         setSubjects(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     };
 
-    const handleCreateSubject = async (name, topicsList) => {
+    const handleCreateSubject = async (name, topicsList, usage) => {
         setShowAddModal(false);
         if(!user) return;
         const subRef = await db.collection('users').doc(user.uid).collection('subjects').add({ name: name, totalTopics: topicsList.length, completed: 0, createdAt: new Date() });
+        
+        // Track Token for Syllabus
+        if(usage) {
+             await db.collection('users').doc(user.uid).set({ 
+                 tokenUsage: firebase.firestore.FieldValue.increment(usage.totalTokenCount || 0) 
+             }, { merge: true });
+        }
+
         const batch = db.batch();
         
         topicsList.forEach(unitObj => {
@@ -1062,7 +1147,7 @@ const App = () => {
                     name: topicName, 
                     unit: unitObj.unit, 
                     completed: false, 
-                    learned: false, // New field
+                    learned: false, 
                     score: 0 
                 });
             });
@@ -1077,6 +1162,13 @@ const App = () => {
 
     const handleDeleteSubject = async (id) => {
         if(!confirm("Are you sure you want to delete this subject? All progress will be lost.")) return;
+        
+        // Delete sub-collections manually (client-side logic)
+        const topicsSnap = await db.collection('users').doc(user.uid).collection('subjects').doc(id).collection('topics').get();
+        const batch = db.batch();
+        topicsSnap.docs.forEach(doc => batch.delete(doc.ref));
+        await batch.commit();
+
         await db.collection('users').doc(user.uid).collection('subjects').doc(id).delete();
         fetchSubjects(user.uid);
     };
@@ -1096,7 +1188,7 @@ const App = () => {
                 score: s, 
                 total: t, 
                 date: new Date(),
-                type: 'quiz', // Type for history filter
+                type: 'quiz', 
                 quizData: quizData, 
                 userAnswers: answers 
             });
@@ -1157,7 +1249,7 @@ const App = () => {
             if (data.error) throw new Error(data.error);
             
             const qData = data.quiz;
-            qData.usage = data.usage; // Attach usage for tracking
+            qData.usage = data.usage; 
             
             setQuizData(qData); setCurrentQ(0); setScore(0); setAnswers({}); setView('quiz');
         } catch (err) { setError(err.message); } finally { setLoading(false); }
@@ -1167,10 +1259,10 @@ const App = () => {
         <div className={theme}>
             <div className="min-h-screen bg-slate-100 dark:bg-[#0f172a] text-slate-900 dark:text-white transition-colors duration-300 font-sans relative flex flex-col">
                 
+                {/* HEADER */}
                 <div className="px-6 py-4 flex justify-between items-center bg-white dark:bg-slate-900/50 backdrop-blur-md sticky top-0 z-40 border-b border-slate-200 dark:border-slate-700 shadow-sm">
                      <div className="flex items-center gap-8">
                         <div className="flex items-center gap-2 font-bold text-xl tracking-tight select-none cursor-pointer" onClick={() => { setActiveTab('generator'); setView('home'); }}><span className="text-indigo-600 dark:text-[#00ffc8]"><Icons.Brain /></span> GenQuiz AI</div>
-                        {/* DESKTOP TABS */}
                         <div className="hidden md:flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
                             <button onClick={() => { setActiveTab('generator'); setView('home'); }} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all active:scale-95 ${activeTab === 'generator' ? 'bg-white dark:bg-[#00ffc8] text-slate-900 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-indigo-500'}`}>Quick Quiz</button>
                             <button onClick={() => { setActiveTab('subjects'); setView('home'); }} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all active:scale-95 ${activeTab === 'subjects' ? 'bg-white dark:bg-[#00ffc8] text-slate-900 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-indigo-500'}`}>My Subjects</button>
@@ -1182,7 +1274,6 @@ const App = () => {
                         <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition active:rotate-12">{theme === 'dark' ? <Icons.Sun /> : <Icons.Moon />}</button>
                         {user ? (
                             <div className="flex items-center gap-3 pl-4 border-l border-slate-200 dark:border-slate-700">
-                                {/* Profile Button (Avatar) */}
                                 <button onClick={() => { setActiveTab('profile'); setView('home'); }} className="relative group">
                                     <img src={user.photoURL} className="w-8 h-8 rounded-full border border-slate-300 dark:border-slate-600 transition-transform group-hover:scale-110 group-active:scale-95" />
                                 </button>
@@ -1202,7 +1293,7 @@ const App = () => {
                      <button onClick={() => { setActiveTab('learn'); setView('home'); }} className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-bold transition-all active:scale-95 ${activeTab === 'learn' ? 'bg-indigo-100 dark:bg-[#00ffc8]/10 text-indigo-600 dark:text-[#00ffc8] ring-1 ring-indigo-500 dark:ring-[#00ffc8]' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>Learn</button>
                 </div>
 
-                {/* Content */}
+                {/* MAIN CONTENT AREA */}
                 <div className="flex-1 p-4 md:p-8 flex flex-col items-center w-full max-w-7xl mx-auto">
                     {showAddModal && <AddSubjectModal onClose={() => setShowAddModal(false)} onSave={handleCreateSubject} />}
                     {showEditModal && <EditSubjectModal user={user} subject={editingSubject} onClose={() => setShowEditModal(false)} onUpdate={() => fetchSubjects(user.uid)} />}
@@ -1218,7 +1309,6 @@ const App = () => {
                         ) : activeTab === 'learn' ? (
                             <LearnDashboard user={user} subjects={subjects} initialData={learnInitData} onStartTest={(lessonText) => generateQuiz({ mode: 'file', sourceText: lessonText, topic: 'Lesson Quiz', difficulty: 'Medium', numQuestions: 5 })} onOpenLogin={() => setShowLoginModal(true)} />
                         ) : (
-                            // 🔥 Profile View
                             <ProfileDashboard user={user} onUpdateProfile={() => setUser({...user})} />
                         )
                     )}
