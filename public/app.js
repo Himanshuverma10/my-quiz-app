@@ -6,27 +6,22 @@ const db = window.db;
 
 // --- 1. HELPER FUNCTIONS ---
 
-// Convert index to Label (0 -> 'A', 1 -> 'B')
 const getLabel = (index) => String.fromCharCode(65 + index);
 
-// Clean option text (Remove "A)", "1." prefixes)
 const cleanOptionText = (text) => {
     if (!text) return "";
     return text.replace(/^[A-Da-d0-9]+[\)\.]\s*/, "").trim();
 };
 
-// Strict Answer Checking Logic
 const isOptionCorrect = (option, correctKey) => {
     if (!option || !correctKey) return false;
     const cleanOpt = option.trim();
     const cleanKey = correctKey.trim();
-    // Direct Match or Prefix Match
     if (cleanOpt === cleanKey) return true;
     if (cleanOpt.startsWith(cleanKey + ")") || cleanOpt.startsWith(cleanKey + ".")) return true;
     return false;
 };
 
-// Format Date for History Grouping
 const formatDateGroup = (dateObj) => {
     if (!dateObj) return "Recent";
     const date = dateObj.toDate ? dateObj.toDate() : new Date(dateObj);
@@ -39,7 +34,23 @@ const formatDateGroup = (dateObj) => {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
 
-// --- 2. ICONS COMPONENT ---
+// Wikipedia Image Fetcher
+const fetchWikiImage = async (query) => {
+    if(!query) return null;
+    try {
+        const searchRes = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${query}&format=json&origin=*`);
+        const searchData = await searchRes.json();
+        if(!searchData.query.search.length) return null;
+        const title = searchData.query.search[0].title;
+        const imgRes = await fetch(`https://en.wikipedia.org/w/api.php?action=query&titles=${title}&prop=pageimages&format=json&pithumbsize=500&origin=*`);
+        const imgData = await imgRes.json();
+        const pages = imgData.query.pages;
+        const pageId = Object.keys(pages)[0];
+        return pages[pageId].thumbnail ? pages[pageId].thumbnail.source : null;
+    } catch (e) { return null; }
+};
+
+// --- 2. ICONS ---
 const Icons = {
     Brain: () => <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"/></svg>,
     Google: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>,
@@ -69,9 +80,8 @@ const Icons = {
     Device: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
 };
 
-// --- 3. MODAL COMPONENTS ---
+// --- 3. MODALS ---
 
-// --- EDIT SUBJECT MODAL ---
 const EditSubjectModal = ({ user, subject, onClose, onUpdate }) => {
     const [name, setName] = useState(subject.name);
     const [syllabus, setSyllabus] = useState('');
@@ -109,9 +119,7 @@ const EditSubjectModal = ({ user, subject, onClose, onUpdate }) => {
                     const textContent = await page.getTextContent();
                     text += textContent.items.map(item => item.str).join(' ') + "\n";
                 }
-            } else {
-                text = await file.text();
-            }
+            } else { text = await file.text(); }
             setSyllabus(text); 
         } catch (err) { alert(err.message); } finally { setParsing(false); }
     };
@@ -121,20 +129,13 @@ const EditSubjectModal = ({ user, subject, onClose, onUpdate }) => {
         if(name !== subject.name) {
             await db.collection('users').doc(user.uid).collection('subjects').doc(subject.id).update({ name });
         }
-
         if(syllabus) {
             try {
-                const response = await fetch('/api/parse-syllabus', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ syllabusText: syllabus })
-                });
+                const response = await fetch('/api/parse-syllabus', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ syllabusText: syllabus }) });
                 const data = await response.json();
                 if(data.error) throw new Error(data.error);
-                
                 const batch = db.batch();
                 const subRef = db.collection('users').doc(user.uid).collection('subjects').doc(subject.id);
-                
                 let newCount = 0;
                 data.syllabusData.forEach(unitObj => {
                     unitObj.topics.forEach(tName => {
@@ -154,12 +155,11 @@ const EditSubjectModal = ({ user, subject, onClose, onUpdate }) => {
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm fade-in p-4">
-            <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 md:p-8 w-[95%] md:w-full max-w-2xl shadow-2xl border border-slate-200 dark:border-slate-700 max-h-[85vh] overflow-y-auto animate-in zoom-in-95 duration-200">
+            <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 max-w-2xl w-full shadow-2xl border border-slate-200 dark:border-slate-700 max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200">
                 <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">Edit Subject</h2>
-                
                 <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Subject Name</label>
                 <input value={name} onChange={e => setName(e.target.value)} className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 mb-6 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all" />
-
+                
                 <div className="mb-6">
                     <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Add New Content (Optional)</label>
                     <div className="flex gap-2 mb-2">
@@ -190,7 +190,6 @@ const EditSubjectModal = ({ user, subject, onClose, onUpdate }) => {
     );
 };
 
-// --- ADD SUBJECT MODAL ---
 const AddSubjectModal = ({ onClose, onSave }) => {
     const [name, setName] = useState('');
     const [syllabus, setSyllabus] = useState('');
@@ -214,9 +213,7 @@ const AddSubjectModal = ({ onClose, onSave }) => {
                     const textContent = await page.getTextContent();
                     text += textContent.items.map(item => item.str).join(' ') + "\n";
                 }
-            } else {
-                text = await file.text();
-            }
+            } else { text = await file.text(); }
             setSyllabus(text); 
         } catch (err) { alert(err.message); } finally { setParsing(false); }
     };
@@ -260,7 +257,6 @@ const AddSubjectModal = ({ onClose, onSave }) => {
     );
 };
 
-// --- LOGIN MODAL ---
 const LoginModal = ({ onLogin, onClose }) => (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm fade-in p-4">
         <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-700 p-8 max-w-md w-[95%] md:w-full text-center relative animate-in zoom-in-95 duration-200">
@@ -275,9 +271,8 @@ const LoginModal = ({ onLogin, onClose }) => (
     </div>
 );
 
-// --- 4. TAB COMPONENTS ---
+// --- 4. VIEW COMPONENTS ---
 
-// --- PROFILE DASHBOARD ---
 const ProfileDashboard = ({ user, onUpdateProfile }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [newName, setNewName] = useState(user.displayName);
@@ -288,7 +283,6 @@ const ProfileDashboard = ({ user, onUpdateProfile }) => {
         const fetchUserData = async () => {
             const snap = await db.collection('users').doc(user.uid).get();
             setUserData(snap.data());
-            
             const sessionSnap = await db.collection('users').doc(user.uid).collection('sessions').orderBy('lastSeen', 'desc').get();
             setActiveSessions(sessionSnap.docs.map(doc => doc.data()));
         };
@@ -308,7 +302,6 @@ const ProfileDashboard = ({ user, onUpdateProfile }) => {
 
     return (
         <div className="w-full max-w-4xl mx-auto fade-in p-4 space-y-6">
-            {/* Identity Card */}
             <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 md:p-8 shadow-lg border border-slate-200 dark:border-slate-700 flex flex-col md:flex-row items-center gap-8 hover:scale-[1.01] transition-transform duration-300 ease-out">
                 <div className="relative">
                     <img src={user.photoURL} className="w-24 h-24 rounded-full border-4 border-indigo-500 shadow-lg" />
@@ -330,7 +323,6 @@ const ProfileDashboard = ({ user, onUpdateProfile }) => {
                 </div>
             </div>
 
-            {/* Stats Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="bg-indigo-600 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden hover:scale-[1.02] transition-transform duration-300 hover:shadow-indigo-500/30">
                     <div className="relative z-10">
@@ -349,7 +341,6 @@ const ProfileDashboard = ({ user, onUpdateProfile }) => {
                 </div>
             </div>
 
-            {/* Security Card */}
             <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 md:p-8 shadow-lg border border-slate-200 dark:border-slate-700">
                 <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2"><Icons.Shield /> Active Sessions</h3>
                 <div className="space-y-4">
@@ -362,7 +353,7 @@ const ProfileDashboard = ({ user, onUpdateProfile }) => {
                                         {session.deviceId === localStorage.getItem('did') ? "Current Device" : "Other Device"}
                                     </p>
                                     <p className="text-xs text-slate-500 max-w-[200px] truncate">{session.ua}</p>
-                                    <p className="text-[10px] text-slate-400 mt-1">Last seen: {session.lastSeen?.toDate ? formatDateGroup(session.lastSeen) : 'Just now'}</p>
+                                    <p className="text-[10px] text-slate-400 mt-1">Last seen: {formatDateGroup(session.lastSeen)}</p>
                                 </div>
                             </div>
                             {session.deviceId === localStorage.getItem('did') && (
@@ -378,7 +369,6 @@ const ProfileDashboard = ({ user, onUpdateProfile }) => {
     );
 };
 
-// --- QUICK GENERATOR ---
 const QuickGenerator = ({ onGenerate, loading, error, progressText }) => {
     const [mode, setMode] = useState('topic');
     const [topic, setTopic] = useState('');
@@ -461,7 +451,6 @@ const QuickGenerator = ({ onGenerate, loading, error, progressText }) => {
     );
 };
 
-// --- SUBJECT DASHBOARD ---
 const SubjectDashboard = ({ user, subjects, onSelectSubject, onAddSubject, onDeleteSubject, onEditSubject, onOpenLogin }) => {
     if (!user) {
         return (
@@ -686,13 +675,11 @@ const HistoryDashboard = ({ user, onOpenLogin, onSelectHistory }) => {
     );
 };
 
-// --- LEARN DASHBOARD ---
 const LearnDashboard = ({ user, subjects, initialData, onStartTest, onOpenLogin }) => {
     const [mode, setMode] = useState('topic');
     const [topic, setTopic] = useState('');
     const [selectedSubject, setSelectedSubject] = useState('');
     const [selectedUnit, setSelectedUnit] = useState('');
-    
     const [allSubjectTopics, setAllSubjectTopics] = useState([]);
     const [availableUnits, setAvailableUnits] = useState([]);
     const [filteredTopics, setFilteredTopics] = useState([]);
@@ -701,6 +688,7 @@ const LearnDashboard = ({ user, subjects, initialData, onStartTest, onOpenLogin 
     const [loading, setLoading] = useState(false);
     const [fileName, setFileName] = useState('');
     const [sourceText, setSourceText] = useState('');
+    const [wikiImage, setWikiImage] = useState(null);
     const fileRef = useRef(null);
 
     useEffect(() => {
@@ -765,6 +753,12 @@ const LearnDashboard = ({ user, subjects, initialData, onStartTest, onOpenLogin 
         if (mode === 'topic' && !topic) return alert("Please enter a topic");
         if (mode === 'file' && !sourceText) return alert("Please upload a file or paste text");
         setLoading(true);
+        setWikiImage(null);
+
+        // 1. Fetch Wiki Image in parallel
+        if (mode === 'topic') fetchWikiImage(topic).then(img => setWikiImage(img));
+
+        // 2. Generate Content
         try {
             const response = await fetch('/api/generate-lesson', {
                 method: 'POST',
@@ -872,9 +866,19 @@ const LearnDashboard = ({ user, subjects, initialData, onStartTest, onOpenLogin 
             ) : (
                 <div className="fade-in">
                     <button onClick={() => setLesson(null)} className="mb-6 text-slate-500 hover:text-indigo-500 flex items-center gap-2 font-bold text-sm active:scale-95 transition"><Icons.ArrowLeft /> Back</button>
-                    <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 md:p-12 shadow-xl border border-slate-200 dark:border-slate-700 mb-8 prose dark:prose-invert max-w-none whitespace-pre-wrap">
-                        <div dangerouslySetInnerHTML={{ __html: lesson.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br/>') }} />
+                    
+                    {/* Wiki Image */}
+                    {wikiImage && (
+                         <div className="w-full h-48 md:h-64 rounded-3xl bg-slate-200 dark:bg-slate-700 mb-8 overflow-hidden relative shadow-lg">
+                             <img src={wikiImage} className="w-full h-full object-cover" />
+                             <div className="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] px-2 py-1 rounded">Image: Wikipedia</div>
+                         </div>
+                    )}
+
+                    <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 md:p-12 shadow-xl border border-slate-200 dark:border-slate-700 mb-8">
+                         <div className="markdown-content" dangerouslySetInnerHTML={{ __html: marked.parse(lesson) }} />
                     </div>
+                    
                     <div className="text-center">
                         <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4">Ready to test your knowledge?</h3>
                         <button onClick={() => onStartTest(lesson)} className="px-8 py-4 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold shadow-lg transition flex items-center gap-2 mx-auto active:scale-95">
@@ -899,6 +903,7 @@ const QuizView = ({ quizData, currentQ, answers, onAnswer, onNext, onQuit }) => 
             <div className="p-8 md:p-10">
                 <div className="flex justify-between items-center mb-6"><span className="text-[10px] font-bold text-indigo-500 dark:text-[#10b981] bg-indigo-50 dark:bg-[#10b981]/10 px-3 py-1 rounded-full uppercase tracking-widest">Q{currentQ + 1} / {quizData.length}</span><button onClick={onQuit} className="text-slate-400 hover:text-red-500 text-xs font-bold uppercase tracking-widest active:scale-95 transition">Quit</button></div>
                 <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-8 leading-snug">{q.question}</h2>
+                
                 <div className="space-y-3">
                     {q.options.map((optText, i) => {
                         const label = getLabel(i); 
@@ -1005,12 +1010,10 @@ const App = () => {
     const [activeSubject, setActiveSubject] = useState(null);
     const [activeTopics, setActiveTopics] = useState([]);
     const [showAddModal, setShowAddModal] = useState(false);
-    const [showLoginModal, setShowLoginModal] = useState(false);
-    const [learnInitData, setLearnInitData] = useState(null);
-
-    // New Edit States
     const [showEditModal, setShowEditModal] = useState(false);
     const [editingSubject, setEditingSubject] = useState(null);
+    const [showLoginModal, setShowLoginModal] = useState(false);
+    const [learnInitData, setLearnInitData] = useState(null);
 
     const [quizData, setQuizData] = useState([]);
     const [currentQ, setCurrentQ] = useState(0);
@@ -1072,31 +1075,10 @@ const App = () => {
         fetchSubjects(user.uid);
     };
 
-const handleDeleteSubject = async (id) => {
-        if(!confirm("Are you sure you want to delete this subject? All topics and progress will be lost.")) return;
-        
-        try {
-            // 1. Pehle saare TOPICS delete karo (Batch delete)
-            const topicsRef = db.collection('users').doc(user.uid).collection('subjects').doc(id).collection('topics');
-            const snapshot = await topicsRef.get();
-            
-            if (!snapshot.empty) {
-                const batch = db.batch();
-                snapshot.docs.forEach((doc) => {
-                    batch.delete(doc.ref);
-                });
-                await batch.commit();
-            }
-
-            // 2. Ab SUBJECT delete karo
-            await db.collection('users').doc(user.uid).collection('subjects').doc(id).delete();
-            
-            // 3. Refresh list
-            fetchSubjects(user.uid);
-        } catch (err) {
-            console.error("Error deleting subject:", err);
-            alert("Error removing subject.");
-        }
+    const handleDeleteSubject = async (id) => {
+        if(!confirm("Are you sure you want to delete this subject? All progress will be lost.")) return;
+        await db.collection('users').doc(user.uid).collection('subjects').doc(id).delete();
+        fetchSubjects(user.uid);
     };
 
     const handleSelectSubject = async (sub) => {

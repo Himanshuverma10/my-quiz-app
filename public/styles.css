@@ -25,3 +25,42 @@ input[type=range]::-webkit-slider-runnable-track {
 
 .fade-in { animation: fadeIn 0.5s ease-out forwards; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+/* --- MARKDOWN STYLING (Like Gemini App) --- */
+.markdown-content { line-height: 1.7; color: #e2e8f0; } /* Light gray text */
+.markdown-content h1, .markdown-content h2, .markdown-content h3 { color: #fff; margin-top: 1.5em; margin-bottom: 0.5em; font-weight: 700; }
+.markdown-content h1 { font-size: 1.8rem; }
+.markdown-content h2 { font-size: 1.4rem; border-bottom: 1px solid #334155; padding-bottom: 0.5rem; }
+.markdown-content h3 { font-size: 1.1rem; }
+.markdown-content p { margin-bottom: 1em; }
+
+/* List Styling */
+.markdown-content ul { list-style-type: disc; padding-left: 1.5em; margin-bottom: 1em; }
+.markdown-content ol { list-style-type: decimal; padding-left: 1.5em; margin-bottom: 1em; }
+.markdown-content li { margin-bottom: 0.3em; }
+
+/* Bold & Strong */
+.markdown-content strong { color: #00ffc8; font-weight: 700; } /* Neon highlight */
+
+/* Code Blocks */
+.markdown-content code { background: #1e293b; padding: 0.2em 0.4em; rounded: 4px; font-family: monospace; font-size: 0.9em; color: #fbbf24; }
+.markdown-content pre { background: #0f172a; padding: 1em; border-radius: 8px; overflow-x: auto; border: 1px solid #334155; margin-bottom: 1em; }
+.markdown-content pre code { background: transparent; padding: 0; color: #e2e8f0; }
+
+/* Tables (The most important part) */
+.markdown-content table { width: 100%; border-collapse: collapse; margin-bottom: 1.5em; overflow: hidden; border-radius: 8px; border: 1px solid #334155; }
+.markdown-content th { background: #1e293b; color: #fff; font-weight: bold; text-align: left; padding: 12px; border-bottom: 1px solid #334155; }
+.markdown-content td { padding: 10px 12px; border-bottom: 1px solid #1e293b; color: #cbd5e1; }
+.markdown-content tr:last-child td { border-bottom: none; }
+.markdown-content tr:nth-child(even) { background: #0f172a; }
+
+/* Light Mode Adjustments */
+.light .markdown-content { color: #334155; }
+.light .markdown-content h1, .light .markdown-content h2, .light .markdown-content h3 { color: #0f172a; border-color: #e2e8f0; }
+.light .markdown-content strong { color: #4f46e5; }
+.light .markdown-content code { background: #f1f5f9; color: #d97706; }
+.light .markdown-content pre { background: #1e293b; }
+.light .markdown-content table { border-color: #cbd5e1; }
+.light .markdown-content th { background: #f1f5f9; color: #0f172a; border-color: #cbd5e1; }
+.light .markdown-content td { border-color: #e2e8f0; color: #334155; }
+.light .markdown-content tr:nth-child(even) { background: #f8fafc; }
