@@ -246,7 +246,7 @@ const App = () => {
     // Progress Text Animation
     useEffect(() => { 
         if (!loading) return; 
-        const texts = ["Reading Content...", "Analyzing Logic...", "Drafting Questions...", "Finalizing..."]; 
+        const texts = ["Scanning Knowledge Base...", "Formulating Questions...", "Finalizing Quiz..."]; 
         let i = 0; const interval = setInterval(() => { setProgressText(texts[i % texts.length]); i++; }, 800); 
         return () => clearInterval(interval); 
     }, [loading]);
@@ -318,11 +318,50 @@ const App = () => {
 
                     {view === 'subject-detail' && <SubjectDetail subject={activeSubject} topics={activeTopics} onBack={() => setView('home')} onStartTopic={generateQuiz} onLearnTopic={handleLearnTopic} />}
                     
-                    {view === 'quiz' && (<QuizView quizData={quizData} currentQ={currentQ} answers={answers} onAnswer={(label) => { const correctLabel = quizData[currentQ].correctAnswer; setAnswers({...answers, [currentQ]: label}); if(label === correctLabel) setScore(s => s+1); }} onNext={() => { if(currentQ < quizData.length -1) setCurrentQ(c => c+1); else { if(user && activeSubject) { const finalScore = Object.keys(answers).reduce((acc, qIdx) => { return acc + (answers[qIdx] === quizData[qIdx].correctAnswer ? 1 : 0); }, 0); handleTopicComplete(finalScore, quizData.length); } else if(user) { const finalScore = Object.keys(answers).reduce((acc, qIdx) => { return acc + (answers[qIdx] === quizData[qIdx].correctAnswer ? 1 : 0); }, 0); saveQuizResult(finalScore, quizData.length); } setView('result'); } }} onQuit={() => setView(activeSubject ? 'subject-detail' : 'home')} />)}
-                    
-                    {view === 'result' && (<ResultView score={score} total={quizData.length} user={user} quizData={quizData} userAnswers={answers} onRetry={() => setView('home')} onOpenLogin={() => setShowLoginModal(true)} saveResult={null} isReviewMode={false} />)}
-                    
-                    {view === 'history-review' && (<ResultView score={score} total={quizData.length} user={user} quizData={quizData} userAnswers={answers} onRetry={() => { setActiveTab('history'); setView('home'); }} saveResult={null} isReviewMode={true} />)}
+                    {view === 'quiz' && (
+                         <QuizView quizData={quizData} currentQ={currentQ} answers={answers} 
+                            onAnswer={(label) => {
+                                const correctLabel = quizData[currentQ].correctAnswer;
+                                setAnswers({...answers, [currentQ]: label}); 
+                                if(label === correctLabel) setScore(s => s+1); 
+                            }}
+                            onNext={() => {
+                                if(currentQ < quizData.length -1) setCurrentQ(c => c+1);
+                                else {
+                                    if(user && activeSubject) {
+                                        const finalScore = Object.keys(answers).reduce((acc, qIdx) => {
+                                            return acc + (answers[qIdx] === quizData[qIdx].correctAnswer ? 1 : 0);
+                                        }, 0);
+                                        handleTopicComplete(finalScore, quizData.length);
+                                    } else if(user) {
+                                        const finalScore = Object.keys(answers).reduce((acc, qIdx) => {
+                                            return acc + (answers[qIdx] === quizData[qIdx].correctAnswer ? 1 : 0);
+                                        }, 0);
+                                        saveQuizResult(finalScore, quizData.length);
+                                    }
+                                    setView('result');
+                                }
+                            }}
+                            onQuit={() => setView(activeSubject ? 'subject-detail' : 'home')}
+                         />
+                    )}
+
+                    {view === 'result' && (
+                        <ResultView score={score} total={quizData.length} user={user} quizData={quizData} userAnswers={answers}
+                            onRetry={() => setView('home')}
+                            onOpenLogin={() => setShowLoginModal(true)}
+                            saveResult={null} 
+                            isReviewMode={false}
+                        />
+                    )}
+
+                    {view === 'history-review' && (
+                        <ResultView score={score} total={quizData.length} user={user} quizData={quizData} userAnswers={answers}
+                            onRetry={() => { setActiveTab('history'); setView('home'); }}
+                            saveResult={null}
+                            isReviewMode={true}
+                        />
+                    )}
                 </div>
             </div>
         </div>

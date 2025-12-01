@@ -1,27 +1,32 @@
 // public/js/utils.js
 
-// Initialize Firebase globals if not already done
+// Ensure Firebase globals exist
 window.auth = window.auth || firebase.auth();
 window.db = window.db || firebase.firestore();
 
-// --- 1. DEFINE HELPERS ON WINDOW ---
+// --- HELPER FUNCTIONS ---
 window.Helpers = {
+    // Convert index 0 -> A, 1 -> B
     getLabel: (index) => String.fromCharCode(65 + index),
 
+    // Clean "A) Option" to "Option"
     cleanOptionText: (text) => {
         if (!text) return "";
         return text.replace(/^[A-Da-d0-9]+[\)\.]\s*/, "").trim();
     },
 
+    // Check answer (Strict Match)
     isOptionCorrect: (option, correctKey) => {
         if (!option || !correctKey) return false;
         const cleanOpt = option.trim();
         const cleanKey = correctKey.trim();
+        
         if (cleanOpt === cleanKey) return true;
         if (cleanOpt.startsWith(cleanKey + ")") || cleanOpt.startsWith(cleanKey + ".")) return true;
         return false;
     },
 
+    // Date Formatter (Today, Yesterday, Date)
     formatDateGroup: (dateObj) => {
         if (!dateObj) return "Recent";
         try {
@@ -36,23 +41,81 @@ window.Helpers = {
         } catch (e) { return "Recent"; }
     },
 
+    // Wikipedia Image Fetcher
     fetchWikiImage: async (query) => {
         if(!query) return null;
         try {
             const searchRes = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${query}&format=json&origin=*`);
             const searchData = await searchRes.json();
             if(!searchData.query.search.length) return null;
+            
             const title = searchData.query.search[0].title;
             const imgRes = await fetch(`https://en.wikipedia.org/w/api.php?action=query&titles=${title}&prop=pageimages&format=json&pithumbsize=500&origin=*`);
             const imgData = await imgRes.json();
+            
             const pages = imgData.query.pages;
             const pageId = Object.keys(pages)[0];
             return pages[pageId].thumbnail ? pages[pageId].thumbnail.source : null;
         } catch (e) { return null; }
+    },
+
+    // PDF Download
+    downloadPDF: (title, score, total, quizData, userAnswers) => {
+        if (!window.jspdf) {
+            alert("PDF Library loading...");
+            return;
+        }
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        
+        doc.setFontSize(20);
+        doc.text("GenQuiz AI - Result", 105, 20, null, null, "center");
+        
+        doc.setFontSize(12);
+        doc.text(`Topic: ${title || "General Quiz"}`, 20, 40);
+        doc.text(`Score: ${score}/${total}`, 20, 50);
+        doc.line(20, 60, 190, 60);
+
+        let y = 70;
+        quizData.forEach((q, i) => {
+            if(y > 270) { doc.addPage(); y=20; }
+            doc.setFont("helvetica", "bold");
+            const qText = doc.splitTextToSize(`${i+1}. ${q.question}`, 170);
+            doc.text(qText, 20, y);
+            y += (qText.length * 7);
+
+            doc.setFont("helvetica", "normal");
+            const ans = userAnswers[i];
+            const correct = q.correctAnswer;
+            
+            if(ans === correct) {
+                doc.setTextColor(0, 150, 0);
+                doc.text(`Your Answer: ${ans} (Correct)`, 20, y);
+            } else {
+                doc.setTextColor(200, 0, 0);
+                doc.text(`Your Answer: ${ans || 'Skipped'}`, 20, y);
+                doc.setTextColor(0, 0, 0);
+                doc.text(`Correct: ${correct}`, 100, y);
+            }
+            doc.setTextColor(0,0,0);
+            y += 15;
+        });
+        doc.save("quiz_result.pdf");
+    },
+
+    // Share Result
+    shareResult: (title, score, total) => {
+        const text = `I scored ${score}/${total} on ${title} using GenQuiz AI!`;
+        if(navigator.share) {
+            navigator.share({ title: 'GenQuiz Result', text: text, url: window.location.href });
+        } else {
+            navigator.clipboard.writeText(text);
+            alert("Copied to clipboard!");
+        }
     }
 };
 
-// --- 2. DEFINE ICONS ON WINDOW ---
+// --- ICONS ---
 window.Icons = {
     Brain: () => <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"/></svg>,
     Google: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>,
@@ -79,102 +142,7 @@ window.Icons = {
     User: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
     Shield: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
     Cpu: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>,
-    Device: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+    Device: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>,
+    Download: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
+    Share: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
 };
-
-// ... existing code ...
-
-/**
- * Generates and downloads a PDF of the quiz results.
- */
-window.downloadPDF = (title, score, total, quizData, userAnswers) => {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-    
-    // Title
-    doc.setFontSize(20);
-    doc.setTextColor(40, 40, 40);
-    doc.text("GenQuiz AI - Result Report", 105, 20, null, null, "center");
-    
-    // Score Summary
-    doc.setFontSize(14);
-    doc.setTextColor(100, 100, 100);
-    doc.text(`Topic: ${title}`, 20, 40);
-    doc.text(`Score: ${score} / ${total} (${Math.round((score/total)*100)}%)`, 20, 50);
-    doc.text(`Date: ${new Date().toLocaleDateString()}`, 20, 60);
-    
-    // Line Separator
-    doc.setLineWidth(0.5);
-    doc.line(20, 65, 190, 65);
-    
-    let y = 80; // Start Y position for questions
-    const pageHeight = doc.internal.pageSize.height;
-
-    quizData.forEach((q, index) => {
-        // Check if we need a new page
-        if (y > pageHeight - 40) {
-            doc.addPage();
-            y = 20;
-        }
-
-        // Question Text
-        doc.setFontSize(12);
-        doc.setTextColor(0, 0, 0);
-        doc.setFont("helvetica", "bold");
-        
-        // Split long text
-        const questionLines = doc.splitTextToSize(`${index + 1}. ${q.question}`, 170);
-        doc.text(questionLines, 20, y);
-        y += (questionLines.length * 7) + 5;
-
-        // User Answer vs Correct Answer
-        const userAns = userAnswers[index] || "Skipped";
-        const isCorrect = userAns === q.correctAnswer;
-
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(11);
-        
-        // Color logic (Green for correct, Red for wrong)
-        if (isCorrect) {
-            doc.setTextColor(0, 128, 0); // Green
-            doc.text(`Your Answer: ${userAns} (Correct)`, 20, y);
-        } else {
-            doc.setTextColor(200, 0, 0); // Red
-            doc.text(`Your Answer: ${userAns}`, 20, y);
-            
-            // Show correct answer next to it
-            doc.setTextColor(0, 0, 0); // Black
-            doc.text(` | Correct: ${q.correctAnswer}`, 80, y);
-        }
-        y += 8;
-
-        // Explanation
-        doc.setFontSize(10);
-        doc.setTextColor(80, 80, 80); // Grey
-        const expLines = doc.splitTextToSize(`Explanation: ${q.explanation}`, 170);
-        doc.text(expLines, 20, y);
-        
-        y += (expLines.length * 5) + 15; // Space for next question
-    });
-
-    // Save the file
-    doc.save(`${title.replace(/\s+/g, '_')}_Results.pdf`);
-};
-
-/**
- * Copies a shareable text summary to clipboard.
- */
-window.shareResult = (title, score, total) => {
-    const percentage = Math.round((score / total) * 100);
-    const text = `🚀 I just scored ${percentage}% on "${title}" using GenQuiz AI! \n\nCan you beat my score? \n#GenQuiz #AI #Learning`;
-    
-    navigator.clipboard.writeText(text).then(() => {
-        alert("Result copied to clipboard!");
-    }).catch(err => {
-        console.error("Failed to copy:", err);
-    });
-};
-
-// --- ADD NEW ICONS ---
-window.Icons.Download = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>;
-window.Icons.Share = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>;
