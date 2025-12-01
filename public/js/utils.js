@@ -59,18 +59,20 @@ window.Helpers = {
         } catch (e) { return null; }
     },
 
-    // PDF Download
+    // 🔥 PDF Download Logic
     downloadPDF: (title, score, total, quizData, userAnswers) => {
         if (!window.jspdf) {
-            alert("PDF Library loading...");
+            alert("PDF Library loading... please try again.");
             return;
         }
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
         
+        // Title
         doc.setFontSize(20);
         doc.text("GenQuiz AI - Result", 105, 20, null, null, "center");
         
+        // Stats
         doc.setFontSize(12);
         doc.text(`Topic: ${title || "General Quiz"}`, 20, 40);
         doc.text(`Score: ${score}/${total}`, 20, 50);
@@ -78,7 +80,9 @@ window.Helpers = {
 
         let y = 70;
         quizData.forEach((q, i) => {
+            // Add new page if space is low
             if(y > 270) { doc.addPage(); y=20; }
+            
             doc.setFont("helvetica", "bold");
             const qText = doc.splitTextToSize(`${i+1}. ${q.question}`, 170);
             doc.text(qText, 20, y);
@@ -89,10 +93,10 @@ window.Helpers = {
             const correct = q.correctAnswer;
             
             if(ans === correct) {
-                doc.setTextColor(0, 150, 0);
+                doc.setTextColor(0, 150, 0); // Green
                 doc.text(`Your Answer: ${ans} (Correct)`, 20, y);
             } else {
-                doc.setTextColor(200, 0, 0);
+                doc.setTextColor(200, 0, 0); // Red
                 doc.text(`Your Answer: ${ans || 'Skipped'}`, 20, y);
                 doc.setTextColor(0, 0, 0);
                 doc.text(`Correct: ${correct}`, 100, y);
@@ -103,14 +107,22 @@ window.Helpers = {
         doc.save("quiz_result.pdf");
     },
 
-    // Share Result
+    // 🔥 Share Logic
     shareResult: (title, score, total) => {
         const text = `I scored ${score}/${total} on ${title} using GenQuiz AI!`;
+        
         if(navigator.share) {
-            navigator.share({ title: 'GenQuiz Result', text: text, url: window.location.href });
+            navigator.share({ 
+                title: 'GenQuiz Result', 
+                text: text, 
+                url: window.location.href 
+            }).catch(console.error);
         } else {
-            navigator.clipboard.writeText(text);
-            alert("Copied to clipboard!");
+            navigator.clipboard.writeText(text).then(() => {
+                // Fallback toast if no navigator.share
+                // (Since we don't have access to React's showToast here easily, we use alert or console)
+                alert("Result copied to clipboard!"); 
+            });
         }
     }
 };
@@ -143,6 +155,7 @@ window.Icons = {
     Shield: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
     Cpu: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>,
     Device: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>,
+    // 🔥 Added Download & Share Icons
     Download: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
     Share: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
 };
