@@ -1,13 +1,40 @@
 const { useState, useEffect, useCallback } = React;
 
-// Connect to Global Window Objects (Loaded from js/ folder)
-const { LoginModal, EditSubjectModal, AddSubjectModal, Toast } = window;
-const { ProfileDashboard, QuickGenerator, SubjectDashboard, HistoryDashboard, LearnDashboard } = window;
-const { QuizView, ResultView } = window;
+// --------------------------------------------------------------
+// 1. IMPORT COMPONENTS FROM WINDOW (Loaded via index.html)
+// --------------------------------------------------------------
+// Ye components public/js/ folder wali files se aa rahe hain
+const { 
+    LoginModal, 
+    EditSubjectModal, 
+    AddSubjectModal, 
+    Toast 
+} = window;
+
+const { 
+    ProfileDashboard, 
+    QuickGenerator, 
+    SubjectDashboard, 
+    HistoryDashboard, 
+    LearnDashboard 
+} = window;
+
+const { 
+    QuizView, 
+    ResultView 
+} = window;
+
 const Icons = window.Icons;
+
+// --------------------------------------------------------------
+// 2. FIREBASE GLOBALS
+// --------------------------------------------------------------
 const auth = window.auth;
 const db = window.db;
 
+// --------------------------------------------------------------
+// 3. MAIN APP CONTROLLER
+// --------------------------------------------------------------
 const App = () => {
     // --- STATE MANAGEMENT ---
     const [user, setUser] = useState(null);
@@ -19,10 +46,13 @@ const App = () => {
     const [subjects, setSubjects] = useState([]);
     const [activeSubject, setActiveSubject] = useState(null);
     const [activeTopics, setActiveTopics] = useState([]);
+    
     const [showAddModal, setShowAddModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
-    const [editingSubject, setEditingSubject] = useState(null);
     const [showLoginModal, setShowLoginModal] = useState(false);
+    
+    // Temporary Data Holders
+    const [editingSubject, setEditingSubject] = useState(null);
     const [learnInitData, setLearnInitData] = useState(null);
     
     // Quiz Data
@@ -39,7 +69,7 @@ const App = () => {
     const [toast, setToast] = useState(null);
     const showToast = (msg, type='success') => setToast({ message: msg, type });
 
-    // --- AUTH & INIT ---
+    // --- AUTH & INITIALIZATION ---
     useEffect(() => {
         if(!auth) return;
         const unsubscribe = auth.onAuthStateChanged((u) => {
@@ -59,13 +89,16 @@ const App = () => {
             deviceId = Math.random().toString(36).substring(2);
             localStorage.setItem('did', deviceId);
         }
+        // Using merge: true to update lastSeen without overwriting other fields
         await db.collection('users').doc(uid).collection('sessions').doc(deviceId).set({
-            deviceId, ua: navigator.userAgent, lastSeen: new Date()
+            deviceId, 
+            ua: navigator.userAgent, 
+            lastSeen: new Date()
         }, { merge: true });
     };
 
     // --- ACTIONS ---
-    const toggleTheme = () => setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+    const toggleTheme = useCallback(() => setTheme(prev => prev === 'dark' ? 'light' : 'dark'), []);
     
     const handleLogin = async () => {
         const provider = new firebase.auth.GoogleAuthProvider();
@@ -85,7 +118,7 @@ const App = () => {
         setSubjects(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     };
 
-    // --- CRUD LOGIC (Create, Read, Update, Delete) ---
+    // --- CRUD LOGIC ---
     const handleCreateSubject = async (name, topicsList, usage) => {
         setShowAddModal(false);
         if(!user) return;
@@ -94,6 +127,7 @@ const App = () => {
             name: name, totalTopics: topicsList.length, completed: 0, createdAt: new Date() 
         });
 
+        // Track Token Usage
         if(usage) {
              await db.collection('users').doc(user.uid).set({ 
                  tokenUsage: firebase.firestore.FieldValue.increment(usage.totalTokenCount || 0) 
@@ -108,15 +142,18 @@ const App = () => {
             });
         });
         
-        await subRef.update({ totalTopics: topicsList.reduce((acc, u) => acc + u.topics.length, 0) });
+        const totalCount = topicsList.reduce((acc, u) => acc + u.topics.length, 0);
+        await subRef.update({ totalTopics: totalCount });
         await batch.commit();
+        
         fetchSubjects(user.uid);
         showToast("Subject created!", "success");
     };
 
     const handleDeleteSubject = async (id) => {
         if(!confirm("Delete this subject?")) return;
-        // Client-side delete simulation for subcollections
+        
+        // Manual recursive delete for subcollections
         const topicsSnap = await db.collection('users').doc(user.uid).collection('subjects').doc(id).collection('topics').get();
         const batch = db.batch();
         topicsSnap.docs.forEach(doc => batch.delete(doc.ref));
@@ -139,7 +176,8 @@ const App = () => {
         if (!user) return;
         try {
             await db.collection('users').doc(user.uid).collection('history').add({ 
-                topic: currentTopicName || "Unknown", score: s, total: t, date: new Date(), 
+                topic: currentTopicName || "Unknown", 
+                score: s, total: t, date: new Date(), 
                 type: 'quiz', quizData: quizData, userAnswers: answers 
             });
 
@@ -158,9 +196,11 @@ const App = () => {
         
         if(topicObj) {
              await db.collection('users').doc(user.uid).collection('subjects').doc(activeSubject.id).collection('topics').doc(topicObj.id).update({ completed: true, score: percentage });
-             // Simple progress tick (Ideally recalculate fully)
+             
+             // Update Subject Progress
              const newCompleted = activeSubject.completed + (topicObj.completed ? 0 : 1);
              await db.collection('users').doc(user.uid).collection('subjects').doc(activeSubject.id).update({ completed: newCompleted });
+             
              fetchSubjects(user.uid);
         }
         saveQuizResult(score, total); 
@@ -172,13 +212,16 @@ const App = () => {
     };
 
     const handleLearnTopic = async (topicName, subjectName, topicId) => {
+        // Add to History
         if(user) {
              await db.collection('users').doc(user.uid).collection('history').add({ type: 'learn', topic: topicName, subject: subjectName, date: new Date() });
         }
+        // Mark as Learned
         if(topicId && activeSubject) {
             await db.collection('users').doc(user.uid).collection('subjects').doc(activeSubject.id).collection('topics').doc(topicId).update({ learned: true });
             setActiveTopics(prev => prev.map(t => t.id === topicId ? { ...t, learned: true } : t));
         }
+        
         setLearnInitData({ topic: topicName, subject: subjectName });
         setActiveTab('learn'); setView('home');
     };
@@ -208,16 +251,17 @@ const App = () => {
         return () => clearInterval(interval); 
     }, [loading]);
 
+    // --- RENDER ---
     return (
         <div className={theme}>
             <div className="min-h-screen bg-slate-100 dark:bg-[#0f172a] text-slate-900 dark:text-white transition-colors duration-300 font-sans relative flex flex-col">
                 
                 {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
-                {/* HEADER & NAV */}
+                {/* HEADER */}
                 <div className="px-6 py-4 flex justify-between items-center bg-white dark:bg-slate-900/50 backdrop-blur-md sticky top-0 z-40 border-b border-slate-200 dark:border-slate-700 shadow-sm">
                      <div className="flex items-center gap-8">
-                        <div className="flex items-center gap-2 font-bold text-xl tracking-tight cursor-pointer" onClick={() => { setActiveTab('generator'); setView('home'); }}>
+                        <div className="flex items-center gap-2 font-bold text-xl tracking-tight select-none cursor-pointer" onClick={() => { setActiveTab('generator'); setView('home'); }}>
                             <span className="text-indigo-600 dark:text-[#00ffc8]"><Icons.Brain /></span> GenQuiz AI
                         </div>
                         <div className="hidden md:flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
@@ -232,7 +276,9 @@ const App = () => {
                         <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition active:rotate-12">{theme === 'dark' ? <Icons.Sun /> : <Icons.Moon />}</button>
                         {user ? (
                             <div className="flex items-center gap-3 pl-4 border-l border-slate-200 dark:border-slate-700">
-                                <button onClick={() => { setActiveTab('profile'); setView('home'); }} className="relative group"><img src={user.photoURL} className="w-8 h-8 rounded-full border border-slate-300 dark:border-slate-600 transition-transform group-hover:scale-110" /></button>
+                                <button onClick={() => { setActiveTab('profile'); setView('home'); }} className="relative group">
+                                    <img src={user.photoURL} className="w-8 h-8 rounded-full border border-slate-300 dark:border-slate-600 transition-transform group-hover:scale-110 group-active:scale-95" loading="lazy" />
+                                </button>
                                 <button onClick={handleLogout} className="p-2 text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition active:scale-95"><Icons.LogOut /></button>
                             </div>
                         ) : (
@@ -241,7 +287,7 @@ const App = () => {
                      </div>
                 </div>
 
-                {/* MOBILE BOTTOM TABS */}
+                {/* MOBILE TABS */}
                 <div className="md:hidden px-4 py-3 bg-white dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-700 sticky top-[73px] z-30 flex gap-2 justify-center shadow-sm overflow-x-auto no-scrollbar">
                      {['generator', 'subjects', 'history', 'learn'].map(tab => (
                         <button key={tab} onClick={() => { setActiveTab(tab); setView('home'); }} className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-bold transition-all active:scale-95 capitalize ${activeTab === tab ? 'bg-indigo-100 dark:bg-[#00ffc8]/10 text-indigo-600 dark:text-[#00ffc8] ring-1 ring-indigo-500 dark:ring-[#00ffc8]' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>
@@ -250,24 +296,26 @@ const App = () => {
                      ))}
                 </div>
 
-                {/* MAIN CONTENT RENDERING */}
+                {/* CONTENT */}
                 <div className="flex-1 p-4 md:p-8 flex flex-col items-center w-full max-w-7xl mx-auto">
-                    
-                    {/* Global Modals */}
                     {showAddModal && <AddSubjectModal onClose={() => setShowAddModal(false)} onSave={handleCreateSubject} showToast={showToast} />}
                     {showEditModal && <EditSubjectModal user={user} subject={editingSubject} onClose={() => setShowEditModal(false)} onUpdate={() => fetchSubjects(user.uid)} showToast={showToast} />}
                     {showLoginModal && <LoginModal onLogin={handleLogin} onClose={() => setShowLoginModal(false)} />}
 
-                    {/* View Routing Logic */}
                     {view === 'home' && (
-                        activeTab === 'generator' ? (<QuickGenerator onGenerate={generateQuiz} loading={loading} error={error} progressText={progressText} />) : 
-                        activeTab === 'subjects' ? (<SubjectDashboard user={user} subjects={subjects} onSelectSubject={handleSelectSubject} onAddSubject={() => setShowAddModal(true)} onDeleteSubject={handleDeleteSubject} onEditSubject={(sub) => { setEditingSubject(sub); setShowEditModal(true); }} onOpenLogin={() => setShowLoginModal(true)} />) : 
-                        activeTab === 'history' ? (<HistoryDashboard user={user} onOpenLogin={() => setShowLoginModal(true)} onSelectHistory={handleSelectHistory} />) : 
-                        activeTab === 'learn' ? (<LearnDashboard user={user} subjects={subjects} initialData={learnInitData} onStartTest={(lessonText) => generateQuiz({ mode: 'file', sourceText: lessonText, topic: 'Lesson Quiz', difficulty: 'Medium', numQuestions: 5 })} onOpenLogin={() => setShowLoginModal(true)} showToast={showToast} />) : 
-                        (<ProfileDashboard user={user} onUpdateProfile={() => setUser({...user})} showToast={showToast} />)
+                        activeTab === 'generator' ? (
+                            <QuickGenerator onGenerate={generateQuiz} loading={loading} error={error} progressText={progressText} />
+                        ) : activeTab === 'subjects' ? (
+                            <SubjectDashboard user={user} subjects={subjects} onSelectSubject={handleSelectSubject} onAddSubject={() => setShowAddModal(true)} onDeleteSubject={handleDeleteSubject} onEditSubject={(sub) => { setEditingSubject(sub); setShowEditModal(true); }} onOpenLogin={() => setShowLoginModal(true)} />
+                        ) : activeTab === 'history' ? (
+                            <HistoryDashboard user={user} onOpenLogin={() => setShowLoginModal(true)} onSelectHistory={handleSelectHistory} />
+                        ) : activeTab === 'learn' ? (
+                            <LearnDashboard user={user} subjects={subjects} initialData={learnInitData} onStartTest={(lessonText) => generateQuiz({ mode: 'file', sourceText: lessonText, topic: 'Lesson Quiz', difficulty: 'Medium', numQuestions: 5 })} onOpenLogin={() => setShowLoginModal(true)} showToast={showToast} />
+                        ) : (
+                            <ProfileDashboard user={user} onUpdateProfile={() => setUser({...user})} showToast={showToast} />
+                        )
                     )}
 
-                    {/* Detailed Views */}
                     {view === 'subject-detail' && <SubjectDetail subject={activeSubject} topics={activeTopics} onBack={() => setView('home')} onStartTopic={generateQuiz} onLearnTopic={handleLearnTopic} />}
                     
                     {view === 'quiz' && (<QuizView quizData={quizData} currentQ={currentQ} answers={answers} onAnswer={(label) => { const correctLabel = quizData[currentQ].correctAnswer; setAnswers({...answers, [currentQ]: label}); if(label === correctLabel) setScore(s => s+1); }} onNext={() => { if(currentQ < quizData.length -1) setCurrentQ(c => c+1); else { if(user && activeSubject) { const finalScore = Object.keys(answers).reduce((acc, qIdx) => { return acc + (answers[qIdx] === quizData[qIdx].correctAnswer ? 1 : 0); }, 0); handleTopicComplete(finalScore, quizData.length); } else if(user) { const finalScore = Object.keys(answers).reduce((acc, qIdx) => { return acc + (answers[qIdx] === quizData[qIdx].correctAnswer ? 1 : 0); }, 0); saveQuizResult(finalScore, quizData.length); } setView('result'); } }} onQuit={() => setView(activeSubject ? 'subject-detail' : 'home')} />)}
@@ -275,7 +323,6 @@ const App = () => {
                     {view === 'result' && (<ResultView score={score} total={quizData.length} user={user} quizData={quizData} userAnswers={answers} onRetry={() => setView('home')} onOpenLogin={() => setShowLoginModal(true)} saveResult={null} isReviewMode={false} />)}
                     
                     {view === 'history-review' && (<ResultView score={score} total={quizData.length} user={user} quizData={quizData} userAnswers={answers} onRetry={() => { setActiveTab('history'); setView('home'); }} saveResult={null} isReviewMode={true} />)}
-                
                 </div>
             </div>
         </div>

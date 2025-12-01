@@ -85,13 +85,16 @@ window.QuizView = React.memo(({ quizData, currentQ, answers, onAnswer, onNext, o
     );
 });
 
-// --- RESULT VIEW ---
-window.ResultView = React.memo(({ score, total, user, quizData, userAnswers, onRetry, onOpenLogin, saveResult, isReviewMode }) => {
-    // Safe Access
+// --- RESULT VIEW (Updated with Export & Share) ---
+window.ResultView = React.memo(({ score, total, user, quizData, userAnswers, onRetry, onOpenLogin, saveResult, isReviewMode, topicName }) => {
+    // Import Helpers
     const Icons = window.Icons;
+    const { downloadPDF, shareResult } = window.Helpers;
+    
     const percentage = Math.round((score / total) * 100);
     const [saved, setSaved] = useState(false);
 
+    // Auto-save logic
     useEffect(() => {
         if (user && !saved && !isReviewMode && saveResult) {
             saveResult(score, total);
@@ -99,15 +102,43 @@ window.ResultView = React.memo(({ score, total, user, quizData, userAnswers, onR
         }
     }, [user]);
 
+    // Handlers
+    const handleDownload = () => {
+        // Use "Quiz Result" as title if topicName is missing
+        const title = topicName || "Quiz Result";
+        downloadPDF(title, score, total, quizData, userAnswers);
+    };
+
+    const handleShare = () => {
+        const title = topicName || "Quiz";
+        shareResult(title, score, total);
+    };
+
     return (
         <div className="w-full max-w-3xl mx-auto text-center fade-in pb-10">
+            
+            {/* Score Card */}
             <div className="bg-white dark:bg-slate-800 rounded-3xl p-10 shadow-2xl border border-slate-200 dark:border-slate-700 transition-colors duration-300 mb-8">
                 <div className="w-24 h-24 mx-auto bg-indigo-100 dark:bg-[#10b981]/20 rounded-full flex items-center justify-center mb-6">
                     <span className="text-3xl font-black text-indigo-600 dark:text-[#10b981]">{percentage}%</span>
                 </div>
-                <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-2 transition-colors">{isReviewMode ? "Quiz Review" : (percentage > 70 ? "Outstanding!" : "Good Effort!")}</h2>
+                
+                <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-2 transition-colors">
+                    {isReviewMode ? "Quiz Review" : (percentage > 70 ? "Outstanding!" : "Good Effort!")}
+                </h2>
                 <p className="text-slate-500 dark:text-slate-400 mb-8">You scored {score} out of {total}</p>
                 
+                {/* 🔥 ACTION BUTTONS ROW 1: Download & Share */}
+                <div className="flex justify-center gap-3 mb-6">
+                    <button onClick={handleDownload} className="px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold text-sm hover:bg-slate-200 dark:hover:bg-slate-600 transition flex items-center gap-2">
+                        <Icons.Download /> PDF
+                    </button>
+                    <button onClick={handleShare} className="px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold text-sm hover:bg-slate-200 dark:hover:bg-slate-600 transition flex items-center gap-2">
+                        <Icons.Share /> Share
+                    </button>
+                </div>
+
+                {/* ACTION BUTTONS ROW 2: Navigation */}
                 <div className="space-y-3 max-w-md mx-auto">
                     <button onClick={onRetry} className="w-full py-4 bg-indigo-600 dark:bg-[#10b981] text-white dark:text-slate-900 rounded-xl font-bold shadow-lg hover:opacity-90 transition active:scale-95">
                         {isReviewMode ? "Back to History" : "Create New Quiz"}
@@ -119,10 +150,13 @@ window.ResultView = React.memo(({ score, total, user, quizData, userAnswers, onR
                         </button>
                     )}
                     
-                    {user && !isReviewMode && (<div className="text-xs text-green-500 font-bold uppercase tracking-widest mt-4">✓ Result Saved</div>)}
+                    {user && !isReviewMode && (
+                        <div className="text-xs text-green-500 font-bold uppercase tracking-widest mt-4">✓ Result Saved</div>
+                    )}
                 </div>
             </div>
 
+            {/* Detailed Analysis (Same as before) */}
             <div className="text-left space-y-6">
                 <h3 className="text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest text-xs text-center mb-6">Detailed Analysis</h3>
                 {quizData.map((q, index) => {
@@ -138,13 +172,11 @@ window.ResultView = React.memo(({ score, total, user, quizData, userAnswers, onR
                                 </div>
                                 <div className="w-full">
                                     <h4 className="text-lg font-bold text-slate-900 dark:text-white mb-3">{q.question}</h4>
-                                    
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                                         <div className={`p-3 rounded-lg text-sm border flex gap-3 items-center ${isCorrect ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-900 text-green-800 dark:text-green-400' : 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-900 text-red-800 dark:text-red-400'}`}>
                                             <div className="font-bold px-2 py-1 rounded bg-white/50 dark:bg-black/20">{userLabel || "-"}</div>
                                             <span className="font-medium opacity-90">Your Answer</span>
                                         </div>
-                                        
                                         {!isCorrect && (
                                              <div className="p-3 rounded-lg text-sm bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 flex gap-3 items-center">
                                                 <div className="font-bold px-2 py-1 rounded bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-400">{correctLabel}</div>
@@ -152,7 +184,6 @@ window.ResultView = React.memo(({ score, total, user, quizData, userAnswers, onR
                                             </div>
                                         )}
                                     </div>
-
                                     <div className="bg-indigo-50 dark:bg-slate-900/50 p-4 rounded-xl border border-indigo-100 dark:border-slate-700">
                                         <span className="text-[10px] font-bold text-indigo-600 dark:text-[#10b981] uppercase tracking-wider block mb-2">Theory</span>
                                         <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">{q.explanation}</p>

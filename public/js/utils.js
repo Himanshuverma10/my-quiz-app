@@ -81,3 +81,100 @@ window.Icons = {
     Cpu: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>,
     Device: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
 };
+
+// ... existing code ...
+
+/**
+ * Generates and downloads a PDF of the quiz results.
+ */
+window.downloadPDF = (title, score, total, quizData, userAnswers) => {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    
+    // Title
+    doc.setFontSize(20);
+    doc.setTextColor(40, 40, 40);
+    doc.text("GenQuiz AI - Result Report", 105, 20, null, null, "center");
+    
+    // Score Summary
+    doc.setFontSize(14);
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Topic: ${title}`, 20, 40);
+    doc.text(`Score: ${score} / ${total} (${Math.round((score/total)*100)}%)`, 20, 50);
+    doc.text(`Date: ${new Date().toLocaleDateString()}`, 20, 60);
+    
+    // Line Separator
+    doc.setLineWidth(0.5);
+    doc.line(20, 65, 190, 65);
+    
+    let y = 80; // Start Y position for questions
+    const pageHeight = doc.internal.pageSize.height;
+
+    quizData.forEach((q, index) => {
+        // Check if we need a new page
+        if (y > pageHeight - 40) {
+            doc.addPage();
+            y = 20;
+        }
+
+        // Question Text
+        doc.setFontSize(12);
+        doc.setTextColor(0, 0, 0);
+        doc.setFont("helvetica", "bold");
+        
+        // Split long text
+        const questionLines = doc.splitTextToSize(`${index + 1}. ${q.question}`, 170);
+        doc.text(questionLines, 20, y);
+        y += (questionLines.length * 7) + 5;
+
+        // User Answer vs Correct Answer
+        const userAns = userAnswers[index] || "Skipped";
+        const isCorrect = userAns === q.correctAnswer;
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(11);
+        
+        // Color logic (Green for correct, Red for wrong)
+        if (isCorrect) {
+            doc.setTextColor(0, 128, 0); // Green
+            doc.text(`Your Answer: ${userAns} (Correct)`, 20, y);
+        } else {
+            doc.setTextColor(200, 0, 0); // Red
+            doc.text(`Your Answer: ${userAns}`, 20, y);
+            
+            // Show correct answer next to it
+            doc.setTextColor(0, 0, 0); // Black
+            doc.text(` | Correct: ${q.correctAnswer}`, 80, y);
+        }
+        y += 8;
+
+        // Explanation
+        doc.setFontSize(10);
+        doc.setTextColor(80, 80, 80); // Grey
+        const expLines = doc.splitTextToSize(`Explanation: ${q.explanation}`, 170);
+        doc.text(expLines, 20, y);
+        
+        y += (expLines.length * 5) + 15; // Space for next question
+    });
+
+    // Save the file
+    doc.save(`${title.replace(/\s+/g, '_')}_Results.pdf`);
+};
+
+/**
+ * Copies a shareable text summary to clipboard.
+ */
+window.shareResult = (title, score, total) => {
+    const percentage = Math.round((score / total) * 100);
+    const text = `🚀 I just scored ${percentage}% on "${title}" using GenQuiz AI! \n\nCan you beat my score? \n#GenQuiz #AI #Learning`;
+    
+    navigator.clipboard.writeText(text).then(() => {
+        alert("Result copied to clipboard!");
+    }).catch(err => {
+        console.error("Failed to copy:", err);
+    });
+};
+
+// --- ADD NEW ICONS ---
+window.Icons.Download = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>;
+window.Icons.Share = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>;
