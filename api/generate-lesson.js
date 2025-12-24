@@ -10,7 +10,7 @@ module.exports = async (req, res) => {
 
     const { topic, subjectContext, sourceText } = req.body;
     const apiKey = process.env.GEMINI_API_KEY;
-    const modelVersion = 'gemini-2.5-pro';
+    const modelVersion = 'gemini-2.5-flash';
 
     let prompt = sourceText 
         ? `Explain this material: """${sourceText.substring(0, 20000)}""". Structure: Overview, Breakdown, Key Takeaways, Summary. Format: Markdown.`
