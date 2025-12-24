@@ -31,6 +31,7 @@ module.exports = async (req, res) => {
         res.status(200).json({ lesson, usage });
 
     } catch (error) {
-        res.status(500).json({ error: "Failed to generate lesson." });
+       console.error(error);
+    res.status(500).json({ error: error.message || JSON.stringify(error) });
     }
 };
