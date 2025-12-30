@@ -11,7 +11,7 @@ module.exports = async (req, res) => {
     const apiKey = process.env.GEMINI_API_KEY;
     const { topic, difficulty, sourceText, numQuestions } = req.body;
     const count = numQuestions || 5;
-    const modelVersion = difficulty === 'Hard' ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
+    const modelVersion = difficulty === 'Hard' ? 'gemini-2.5-flash' : 'gemini-2.5-flash';
 
     let systemInstruction = sourceText 
         ? `Source Material: """${sourceText.substring(0, 25000)}""". Generate ${count} MCQs based on this.`
